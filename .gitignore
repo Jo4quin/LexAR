@@ -1,0 +1,18 @@
+# Datos: paquetes pesados (cientos de MB), no se versionan.
+# Se comparten por fuera de git; ver README.md / CLAUDE.md para la ubicacion esperada.
+/data/
+
+# Salidas generadas por notebooks/scripts.
+/outputs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Entorno
+.env
