@@ -64,18 +64,26 @@ El corpus apunta a **leyes y decreto-leyes nacionales argentinas**. No incluye, 
 
 El alcance real depende de la cobertura efectiva de los datos ya recolectados.
 
-### Paquetes presentes en el repositorio
+### Paquete presente en el repositorio
 
-- `lexar_dataset_2026-06-25/`: snapshot con corpus procesado, documentacion tecnica y tabla unificada de texto. Segun su README, contiene 30.061 documentos y 23.585 documentos con texto limpio, equivalentes al 78,5 % del corpus.
-- `lexar_datos_infoleg_saij/`: paquete armado posteriormente con datos Infoleg + SAIJ. Su `LEEME.md` describe 30.061 documentos, pero una cobertura menor de texto completo en SAIJ para ese paquete.
+Los datos **no se versionan en git** (son cientos de MB y superan el limite de GitHub); se comparten por
+fuera del repo y viven localmente en `data/`, que esta en `.gitignore`. Ver `CLAUDE.md` para instrucciones
+de donde colocarlos.
+
+- `data/lexar_datos_infoleg_saij/`: paquete con datos Infoleg + SAIJ combinados. Su `LEEME.md` describe
+  30.061 documentos totales, de los cuales 8.887 (29,6 %) tienen texto completo (8.684 de Infoleg, 203 de
+  SAIJ) tras deduplicar y descartar registros sin texto util.
 
 Para el desarrollo inicial conviene tomar como punto de partida el archivo:
 
 ```text
-lexar_dataset_2026-06-25/data/processed/text_corpus/text_versions.parquet
+data/lexar_datos_infoleg_saij/corpus_unificado/text_versions.parquet
 ```
 
-Este archivo contiene textos limpios y unificados, listos para segmentacion. La diferencia entre snapshots debe documentarse en el informe final y resolverse antes de fijar resultados experimentales definitivos.
+Este archivo contiene los 9.518 textos limpios y unificados (Infoleg + SAIJ, con `quality_flag`), listos
+para segmentacion. Un paquete anterior mas amplio (`lexar_dataset_2026-06-25/`) fue mencionado en una
+version previa de este documento pero nunca llego a incorporarse al proyecto; si aparece en el futuro,
+documentar la diferencia de cobertura contra este paquete antes de fijar resultados experimentales.
 
 ## Unidad de analisis
 
