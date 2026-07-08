@@ -251,19 +251,22 @@ Si se consigue revision de abogados o docentes, se puede construir un pequeno co
 
 ## Plan de trabajo
 
-### Fase 1: Consolidacion de datos
+### Fase 1: Consolidacion de datos — completa
 
-- Elegir el snapshot principal.
+- Elegir el snapshot principal: `lexar_datos_infoleg_saij`.
 - Confirmar conteos de documentos, textos y fuentes.
 - Definir esquema de `legal_fragments`.
 - Implementar o ajustar segmentacion por articulo.
 
-### Fase 2: Embeddings y busqueda
+### Fase 2: Embeddings y busqueda — completa
 
-- Generar embeddings sobre una muestra inicial.
-- Construir indice vectorial.
-- Recuperar vecinos cercanos por fragmento.
-- Inspeccionar clusters y subespacios.
+- Generar embeddings sobre el corpus completo (no solo una muestra): 113.895 fragmentos, 112.582
+  embeddings unicos via Vertex AI (`gemini-embedding-001`).
+- Construir indice vectorial (FAISS, similitud coseno exacta).
+- Recuperar vecinos cercanos por fragmento: 679.720 pares candidatos.
+- Inspeccionar clusters y subespacios: 8.942 clusters exploratorios; visualizacion PCA/t-SNE.
+
+Detalle tecnico completo en `CLAUDE.md` (seccion "Notebook architecture").
 
 ### Fase 3: Analisis de candidatos
 
