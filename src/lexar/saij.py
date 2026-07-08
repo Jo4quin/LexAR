@@ -70,6 +70,12 @@ def extract_pdf_text(pdf_bytes: bytes) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
+def _s(value) -> str:
+    """SAIJ mezcla tipos entre documentos (numero-interno viene como int o como string segun
+    el fallo); todo campo escalar se castea a str para que los batches parquet no rompan."""
+    return "" if value is None else str(value)
+
+
 def fetch_fallo(uuid: str) -> dict:
     """Baja metadata + texto (PDF) de un fallo. Nunca lanza: los errores quedan en fetch_status."""
     row = {"case_id": f"saij:{uuid}", "saij_uuid": uuid, "fetch_status": "ok", "full_text": ""}
@@ -79,15 +85,15 @@ def fetch_fallo(uuid: str) -> dict:
         content = document.get("content", {})
         friendly = (document.get("metadata", {}).get("friendly-url") or {}).get("description", "")
         row.update({
-            "fecha": content.get("fecha", ""),
-            "tipo_fallo": content.get("tipo-fallo", ""),
-            "tribunal": content.get("tribunal", ""),
-            "actor": content.get("actor", ""),
-            "demandado": content.get("demandado", ""),
-            "sobre": content.get("sobre", ""),
-            "magistrados": content.get("magistrados", ""),
-            "numero_interno": content.get("numero-interno", ""),
-            "id_infojus": content.get("id-infojus", ""),
+            "fecha": _s(content.get("fecha")),
+            "tipo_fallo": _s(content.get("tipo-fallo")),
+            "tribunal": _s(content.get("tribunal")),
+            "actor": _s(content.get("actor")),
+            "demandado": _s(content.get("demandado")),
+            "sobre": _s(content.get("sobre")),
+            "magistrados": _s(content.get("magistrados")),
+            "numero_interno": _s(content.get("numero-interno")),
+            "id_infojus": _s(content.get("id-infojus")),
             "sumarios_relacionados": json.dumps(content.get("sumarios-relacionados", {}), ensure_ascii=False),
             "url": f"{BASE_URL}/{friendly}" if friendly else "",
         })
@@ -164,6 +170,39 @@ def scrape_fallos_csjn(
     if buffer:
         pd.DataFrame(buffer).to_parquet(parts_dir / f"part_{next_part:06d}.parquet", index=False)
     print(f"Scraping terminado: {fetched:,} fallos bajados en esta corrida.")
+
+
+def build_case_fragments(fallos: pd.DataFrame) -> pd.DataFrame:
+    """Chunkea el texto de cada fallo (los fallos no tienen estructura `ARTICULO n`; se usa
+    chunk_text directo, igual que el fallback de leyes sin articulos). Mismo esquema que
+    legal_fragments, con namespace `cfrag:` en fragment_id."""
+    from .segmentation import chunk_text, content_hash
+
+    rows: list[dict] = []
+    for _, fallo in fallos.iterrows():
+        for ordinal, (start, end, chunk) in enumerate(chunk_text(fallo["full_text"]), start=1):
+            rows.append({
+                "case_id": fallo["case_id"],
+                "fragment_type": "chunk",
+                "ordinal": ordinal,
+                "label": f"CHUNK {ordinal}",
+                "char_start": start,
+                "char_end": end,
+                "text": chunk,
+                "content_hash": content_hash(chunk),
+                "text_len": len(chunk),
+                "fecha": fallo["fecha"],
+                "tipo_fallo": fallo["tipo_fallo"],
+                "actor": fallo["actor"],
+                "demandado": fallo["demandado"],
+                "sobre": fallo["sobre"],
+                "id_infojus": fallo["id_infojus"],
+                "url": fallo["url"],
+            })
+    fragments = pd.DataFrame(rows)
+    if not fragments.empty:
+        fragments.insert(0, "fragment_id", [f"cfrag:{i:08d}" for i in range(len(fragments))])
+    return fragments
 
 
 def consolidate_fallos(parts_dir: Path, output_path: Path, since: str = "2020-01-01") -> pd.DataFrame:
