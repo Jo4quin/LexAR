@@ -1,0 +1,180 @@
+"""Scraper de fallos CSJN contra la API JSON de SAIJ (Fase 4).
+
+API descubierta el 2026-07-08 (misma familia de endpoints que produjo saij_texts.csv):
+- Busqueda: https://www.saij.gob.ar/busqueda?o=<offset>&p=<page>&f=<facets>&s=fecha-rango|DESC
+  Gotcha: el facet de tribunal es `Tribunal/...` — `Organismo/...` devuelve 0 resultados.
+- Documento: https://www.saij.gob.ar/view-document?guid=<uuid> → JSON con metadata del fallo;
+  el texto completo NO viene en el JSON sino como PDF referenciado en content['texto-doc'].
+- PDF: https://www.saij.gob.ar/descarga-archivo?guid=<pdf-uuid>&name=<file-name>
+  Los fallos >=2020 son PDFs digitales; el texto se extrae con pypdf. Si un PDF no tiene capa
+  de texto (escaneado), el fallo queda con fetch_status='pdf_no_text' en vez de romper la corrida.
+"""
+from __future__ import annotations
+
+import io
+import json
+import time
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+import pandas as pd
+
+FACETS_FALLOS_CSJN = (
+    "Total"
+    "|Tipo de Documento/Jurisprudencia/Fallo"
+    "|Tribunal/CORTE SUPREMA DE JUSTICIA DE LA NACION"
+)
+BASE_URL = "https://www.saij.gob.ar"
+USER_AGENT = "LexAR-academico/1.0 (proyecto NLP UdeSA)"
+REQUEST_SLEEP_SECONDS = 0.4
+
+
+def _get(url: str, timeout: int = 60) -> bytes:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    time.sleep(REQUEST_SLEEP_SECONDS)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read()
+
+
+def _get_json(url: str) -> dict:
+    return json.loads(_get(url).decode("utf-8", errors="replace"))
+
+
+def search_fallo_uuids(page_size: int = 100, max_pages: int = 500):
+    """Genera UUIDs de fallos CSJN en orden fecha DESC, pidiendo paginas de a una (lazy:
+    quien consume corta cuando llega a fallos anteriores al rango buscado, sin listar los
+    ~17k uuids historicos). La fecha real se lee despues del view-document de cada fallo,
+    porque el resultado de busqueda colapsado no la incluye."""
+    for page in range(max_pages):
+        params = {
+            "o": page * page_size,
+            "p": page_size,
+            "f": FACETS_FALLOS_CSJN,
+            "s": "fecha-rango|DESC",
+            "v": "colapsada",
+        }
+        url = f"{BASE_URL}/busqueda?" + urllib.parse.urlencode(params)
+        results = _get_json(url)["searchResults"]
+        docs = results.get("documentResultList") or []
+        if not docs:
+            return
+        for doc in docs:
+            yield doc["uuid"]
+
+
+def extract_pdf_text(pdf_bytes: bytes) -> str:
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def fetch_fallo(uuid: str) -> dict:
+    """Baja metadata + texto (PDF) de un fallo. Nunca lanza: los errores quedan en fetch_status."""
+    row = {"case_id": f"saij:{uuid}", "saij_uuid": uuid, "fetch_status": "ok", "full_text": ""}
+    try:
+        raw = _get_json(f"{BASE_URL}/view-document?guid={uuid}")
+        document = json.loads(raw["data"])["document"]
+        content = document.get("content", {})
+        friendly = (document.get("metadata", {}).get("friendly-url") or {}).get("description", "")
+        row.update({
+            "fecha": content.get("fecha", ""),
+            "tipo_fallo": content.get("tipo-fallo", ""),
+            "tribunal": content.get("tribunal", ""),
+            "actor": content.get("actor", ""),
+            "demandado": content.get("demandado", ""),
+            "sobre": content.get("sobre", ""),
+            "magistrados": content.get("magistrados", ""),
+            "numero_interno": content.get("numero-interno", ""),
+            "id_infojus": content.get("id-infojus", ""),
+            "sumarios_relacionados": json.dumps(content.get("sumarios-relacionados", {}), ensure_ascii=False),
+            "url": f"{BASE_URL}/{friendly}" if friendly else "",
+        })
+        texto_doc = content.get("texto-doc") or {}
+        if not texto_doc.get("uuid"):
+            row["fetch_status"] = "no_pdf"
+            return row
+        pdf_url = f"{BASE_URL}/descarga-archivo?" + urllib.parse.urlencode(
+            {"guid": texto_doc["uuid"], "name": texto_doc.get("file-name", "doc.pdf")}
+        )
+        text = extract_pdf_text(_get(pdf_url))
+        if len(text.strip()) < 200:
+            row["fetch_status"] = "pdf_no_text"
+        row["full_text"] = text
+    except Exception as exc:
+        row["fetch_status"] = f"error: {type(exc).__name__}: {exc}"[:300]
+    return row
+
+
+def _load_fetched_uuids(parts_dir: Path) -> set[str]:
+    done: set[str] = set()
+    for part in sorted(parts_dir.glob("part_*.parquet")):
+        done.update(pd.read_parquet(part, columns=["saij_uuid"])["saij_uuid"])
+    return done
+
+
+def scrape_fallos_csjn(
+    parts_dir: Path,
+    since: str = "2020-01-01",
+    max_fallos: int | None = None,
+    checkpoint_every: int = 50,
+) -> None:
+    """Corrida completa reanudable: lista uuids, saltea los ya bajados, corta en `since`.
+
+    Como la busqueda viene en fecha DESC, el corte por fecha se aplica al consolidar; aca se
+    dejan de pedir documentos nuevos cuando una racha de `checkpoint_every` fallos consecutivos
+    quedo antes de `since` (margen para fechas levemente desordenadas en el indice de SAIJ).
+    """
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    already = _load_fetched_uuids(parts_dir)
+    print(f"Ya bajados en checkpoints previos: {len(already):,}")
+
+    buffer: list[dict] = []
+    next_part = len(list(parts_dir.glob("part_*.parquet")))
+    fetched = 0
+    consecutive_old = 0
+
+    for uuid in search_fallo_uuids():
+        if uuid in already:
+            continue
+        row = fetch_fallo(uuid)
+        buffer.append(row)
+        fetched += 1
+
+        fecha = row.get("fecha") or ""
+        if fecha and fecha < since:
+            consecutive_old += 1
+        else:
+            consecutive_old = 0
+
+        if len(buffer) >= checkpoint_every:
+            pd.DataFrame(buffer).to_parquet(parts_dir / f"part_{next_part:06d}.parquet", index=False)
+            next_part += 1
+            buffer = []
+            print(f"  checkpoint: {fetched:,} fallos bajados en esta corrida (ultima fecha: {fecha})")
+
+        if consecutive_old >= checkpoint_every:
+            print(f"Corte: {consecutive_old} fallos consecutivos anteriores a {since}.")
+            break
+        if max_fallos is not None and fetched >= max_fallos:
+            print(f"Corte: MAX_FALLOS={max_fallos} alcanzado (smoke test).")
+            break
+
+    if buffer:
+        pd.DataFrame(buffer).to_parquet(parts_dir / f"part_{next_part:06d}.parquet", index=False)
+    print(f"Scraping terminado: {fetched:,} fallos bajados en esta corrida.")
+
+
+def consolidate_fallos(parts_dir: Path, output_path: Path, since: str = "2020-01-01") -> pd.DataFrame:
+    """Une los part files, filtra a fecha >= since y fetch_status ok, deduplica por uuid."""
+    parts = sorted(parts_dir.glob("part_*.parquet"))
+    assert parts, f"No hay checkpoints en {parts_dir} — correr scrape_fallos_csjn primero."
+    fallos = pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+    fallos = fallos.drop_duplicates("saij_uuid", keep="last")
+    in_scope = fallos[(fallos["fecha"] >= since) & (fallos["fetch_status"] == "ok")].copy()
+    dropped = len(fallos) - len(in_scope)
+    print(f"Fallos consolidados: {len(in_scope):,} en alcance (>= {since}, status ok); {dropped:,} descartados/fuera de rango")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    in_scope.reset_index(drop=True).to_parquet(output_path, index=False)
+    return in_scope
