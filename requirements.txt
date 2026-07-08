@@ -1,0 +1,8 @@
+pandas
+pyarrow
+numpy
+google-genai
+faiss-cpu
+matplotlib
+scikit-learn
+jupyter
