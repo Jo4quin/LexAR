@@ -268,12 +268,22 @@ Si se consigue revision de abogados o docentes, se puede construir un pequeno co
 
 Detalle tecnico completo en `CLAUDE.md` (seccion "Notebook architecture").
 
-### Fase 3: Analisis de candidatos
+### Fase 3: Analisis de candidatos — completa
 
-- Disenar prompt de clasificacion.
-- Clasificar pares candidatos.
-- Guardar etiquetas, explicaciones y evidencia.
-- Ajustar filtros para reducir falsos positivos.
+- Disenar prompt de clasificacion: guia de las 6 etiquetas, exige citar evidencia textual de ambos
+  fragmentos, usa el grafo de modificaciones de Infoleg como pista (no como etiqueta automatica).
+- Reglas deterministas antes del LLM (near_identical, boilerplate): resolvieron 23.889 de 68.050 pares
+  (35%) sin costo de LLM.
+- Clasificar pares candidatos en dos niveles: triage con `gemini-2.5-flash-lite` sobre 44.161 pares,
+  verificacion con `gemini-2.5-flash` sobre los 440 marcados `possible_conflict` — confirmo solo 84 (19%),
+  bajando el resto a `different_scope`/`possible_modification`/`possible_overlap`.
+- Guardar etiquetas, confianza, explicacion y evidencia citada en `candidate_classifications.parquet`.
+- Golden set estratificado (80 pares) para evaluacion humana, con guia de etiquetado incluida en el
+  notebook.
+
+Distribucion final: 25.017 `possible_overlap`, 24.868 `neutral`, 14.077 `possible_modification`, 3.607
+`different_scope`, 397 `needs_review`, 84 `possible_conflict`. Detalle tecnico completo en `CLAUDE.md`
+(seccion "Notebook architecture (Fase 3)").
 
 ### Fase 4: Redaccion alternativa
 
