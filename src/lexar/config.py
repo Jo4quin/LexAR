@@ -52,8 +52,11 @@ NORM_LINKS_PATH = OUTPUT_DIR / "norm_links.parquet"
 LINK_SUMMARIES_PATH = OUTPUT_DIR / "link_summaries.parquet"
 
 # Fase 6/8 — chatbot y evaluacion.
+# REPO_DIR es la raiz del checkout que contiene este codigo (worktree incluido) — para archivos
+# versionados en git, a diferencia de ROOT que apunta a donde viven data/ y outputs/ compartidos.
+REPO_DIR = Path(__file__).resolve().parents[2]
+CASOS_PRUEBA_PATH = REPO_DIR / "eval" / "casos_prueba.csv"
 EVAL_DIR = OUTPUT_DIR / "eval"
-CASOS_PRUEBA_PATH = EVAL_DIR / "casos_prueba.csv"
 
 # Vertex AI: mismo proyecto y auth ADC configurados en la Fase 2 (ver CLAUDE.md).
 GCP_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "lexar-501717")

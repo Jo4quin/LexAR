@@ -73,8 +73,12 @@ def build_norm_links() -> pd.DataFrame:
 
     # 3. Grafo oficial de Infoleg, con direccion (source modifica a target).
     relations = pd.read_csv(
-        RELATIONS_PATH, usecols=["source_document_id", "target_document_id"]
+        RELATIONS_PATH,
+        usecols=["source_document_id", "target_document_id"],
+        dtype=str,
+        keep_default_na=False,
     ).drop_duplicates()
+    relations = relations[(relations["source_document_id"] != "") & (relations["target_document_id"] != "")]
     official = relations.rename(
         columns={"source_document_id": "document_a_id", "target_document_id": "document_b_id"}
     )
@@ -103,6 +107,45 @@ def build_norm_links() -> pd.DataFrame:
         f"{(links['link_source'] == 'official').sum():,} oficiales, "
         f"{(links['link_source'] == 'both').sum():,} ambos)"
     )
+    return links
+
+
+def build_law_case_links(case_fragments: pd.DataFrame, case_embeddings: np.ndarray, top_k: int = 8) -> pd.DataFrame:
+    """Vinculo ley↔fallo (Fase 4.4): busca cada fragmento de fallo contra el indice FAISS de
+    leyes y agrega a nivel (document_id, case_id). Sin text_a/text_b en la tabla bulk — misma
+    regla de memoria que analysis_candidates (ver CLAUDE.md)."""
+    from .config import LAW_CASE_LINKS_PATH
+    from .retrieval import load_law_index
+
+    law = load_law_index()
+    scores, neighbor_idx = law.index.search(
+        np.ascontiguousarray(case_embeddings.astype(np.float32)), top_k
+    )
+
+    law_doc_ids = law.fragments["document_id"].to_numpy()
+    law_fragment_ids = law.fragments["fragment_id"].to_numpy()
+    pairs = pd.DataFrame({
+        "case_id": case_fragments["case_id"].to_numpy().repeat(top_k),
+        "case_fragment_id": case_fragments["fragment_id"].to_numpy().repeat(top_k),
+        "document_id": law_doc_ids[neighbor_idx.ravel()],
+        "law_fragment_id": law_fragment_ids[neighbor_idx.ravel()],
+        "similarity_score": scores.ravel(),
+    })
+    pairs = pairs[pairs["similarity_score"] > 0]
+
+    best = pairs.sort_values("similarity_score", ascending=False).drop_duplicates(["case_id", "document_id"])
+    counts = pairs.groupby(["case_id", "document_id"]).agg(
+        n_fragment_pairs=("similarity_score", "size"),
+        mean_similarity=("similarity_score", "mean"),
+    )
+    links = best.merge(counts, on=["case_id", "document_id"]).rename(
+        columns={"similarity_score": "max_similarity"}
+    )
+    links = links.sort_values("max_similarity", ascending=False).reset_index(drop=True)
+    LAW_CASE_LINKS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    links.to_parquet(LAW_CASE_LINKS_PATH, index=False)
+    print(f"law_case_links: {len(links):,} pares (documento, fallo); "
+          f"{links['case_id'].nunique():,} fallos, {links['document_id'].nunique():,} normas")
     return links
 
 
