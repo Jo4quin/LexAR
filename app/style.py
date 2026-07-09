@@ -1,35 +1,34 @@
-"""Identidad visual compartida por las 3 paginas (Fase 7 + retoque UX 2026-07-09).
+"""Identidad visual compartida por las 3 paginas (Fase 7 + 2 rondas de retoque UX 2026-07-09).
 
-Antes de esto la app usaba el tema default de Streamlit sin ninguna paleta/tipografia propia
-("se ve muy generica" fue el feedback). El tema base (colores) vive en `.streamlit/config.toml`;
-este modulo agrega tipografia y componentes chicos (badges, cards) que Streamlit no soporta de
-fabrica. `inject_css()` se llama una vez al principio de cada pagina.
+Primera ronda: paleta navy/vino "papel legal" — el feedback fue que se veia demasiado
+conservadora/institucional, con mucho espacio en blanco y botones chicos. Segunda ronda (esta):
+paleta azul profundo + acento turquesa mas "producto SaaS", mas densidad (menos padding
+vertical default de Streamlit) y controles mas grandes. El tema base (colores de los widgets
+nativos) vive en `.streamlit/config.toml`; este modulo agrega tipografia, densidad y componentes
+chicos (badges, cards) que Streamlit no soporta de fabrica. `inject_css()` se llama una vez al
+principio de cada pagina.
 """
 from __future__ import annotations
 
 import streamlit as st
 
-# Paleta: navy institucional + vino para jurisprudencia/alertas, sobre un fondo papel calido
-# (coherente con .streamlit/config.toml). Un solo tema (no hay variante oscura): la app corre
-# localmente y el toggle de tema de Streamlit queda deshabilitado al fijar [theme] en config.toml,
-# asi que conviene comprometerse a un unico look bien resuelto en vez de uno a medias.
 _CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-    --lx-paper: #f8f6f0;
-    --lx-ink: #1c2536;
-    --lx-primary: #1f3a5f;
-    --lx-primary-soft: #e4ebf3;
-    --lx-accent: #8a2332;
-    --lx-accent-soft: #f4e3e6;
-    --lx-muted: #6b7280;
-    --lx-good: #1f6f4a;
-    --lx-good-soft: #e1f0e8;
-    --lx-bad: #9b2c2c;
-    --lx-bad-soft: #fbe6e6;
-    --lx-border: #ddd5c2;
+    --lx-paper: #f6f9fb;
+    --lx-ink: #0f1b2d;
+    --lx-primary: #0e7490;
+    --lx-primary-soft: #e0f2f7;
+    --lx-accent: #06b6d4;
+    --lx-accent-soft: #e3f8fb;
+    --lx-muted: #64748b;
+    --lx-good: #15803d;
+    --lx-good-soft: #e2f4e8;
+    --lx-bad: #b91c1c;
+    --lx-bad-soft: #fbe7e7;
+    --lx-border: #dbe4ea;
 }
 
 /* Ojo: NO usar selectores tipo [class*="st-"] aca — los emotion-classnames internos de Streamlit
@@ -37,13 +36,14 @@ _CSS = """
 (termina mostrando el nombre del icono como texto plano en vez del glifo). Alcanza con heredar desde
 html/body/.stApp. */
 html, body, .stApp {
-    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    font-family: 'Inter', -apple-system, sans-serif;
 }
 
 h1, h2, h3, h4, .stApp [data-testid="stHeading"] h1, .stApp [data-testid="stHeading"] h2 {
-    font-family: 'Source Serif 4', Georgia, serif !important;
+    font-family: 'Manrope', -apple-system, sans-serif !important;
+    font-weight: 800 !important;
     color: var(--lx-ink);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
 }
 
 [data-testid="stMetricValue"], code, .lexar-num {
@@ -51,61 +51,87 @@ h1, h2, h3, h4, .stApp [data-testid="stHeading"] h1, .stApp [data-testid="stHead
     font-variant-numeric: tabular-nums;
 }
 
-/* Encabezado de pagina: un filete navy fino arriba de todo, como un membrete. */
+/* Menos aire arriba/abajo y un ancho de lectura mas razonable: el padding default de Streamlit
+(~6rem verticales sumando header+block-container) era la principal fuente del "mucho espacio en
+blanco" reportado. */
+.block-container {
+    padding-top: 2.25rem;
+    padding-bottom: 3rem;
+    max-width: 1180px;
+}
+[data-testid="stVerticalBlock"] {
+    gap: 0.6rem;
+}
+
+/* Encabezado de pagina: filete de acento arriba de todo, como un membrete de producto. */
 [data-testid="stAppViewContainer"] > .main {
     border-top: 4px solid var(--lx-primary);
 }
 
+/* Botones mas grandes y con mas presencia — el feedback fue "botones chicos". */
 .stButton > button {
-    border-radius: 6px;
-    font-weight: 500;
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 0.55rem 1.35rem;
+    font-size: 0.95rem;
+    transition: transform 0.05s ease, box-shadow 0.15s ease;
 }
 .stButton > button[kind="primary"], .stButton > button:not([kind]) {
     background-color: var(--lx-primary);
     border-color: var(--lx-primary);
 }
+.stButton > button:hover {
+    box-shadow: 0 2px 10px rgba(14, 116, 144, 0.25);
+    transform: translateY(-1px);
+}
 
 .stTextInput input, .stSelectbox [data-baseweb="select"] {
-    border-radius: 6px;
+    border-radius: 8px;
+}
+.stTextInput input {
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
 }
 
 .lexar-eyebrow {
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-size: 0.72rem;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--lx-muted);
+    color: var(--lx-accent);
     margin-bottom: 0.15rem;
 }
 
 /* Badges: pills chicas para link_source / dominant_label / estado, en vez de emoji+texto plano. */
 .lexar-badge {
     display: inline-block;
-    padding: 0.12rem 0.55rem;
+    padding: 0.15rem 0.6rem;
     border-radius: 999px;
     font-size: 0.78rem;
-    font-weight: 500;
+    font-weight: 600;
     line-height: 1.5;
     white-space: nowrap;
 }
 .lexar-badge--primary { background: var(--lx-primary-soft); color: var(--lx-primary); }
-.lexar-badge--accent { background: var(--lx-accent-soft); color: var(--lx-accent); }
+.lexar-badge--accent { background: var(--lx-accent-soft); color: #0c7c93; }
 .lexar-badge--good { background: var(--lx-good-soft); color: var(--lx-good); }
 .lexar-badge--bad { background: var(--lx-bad-soft); color: var(--lx-bad); }
-.lexar-badge--muted { background: #eee9dc; color: var(--lx-muted); }
+.lexar-badge--muted { background: #eef2f5; color: var(--lx-muted); }
 
-/* Cards de fallos CSJN: rail de color a la izquierda en vez de un container liso. */
+/* Cards: fondo blanco con sombra suave en vez de un container liso — mas "producto", menos hoja
+de papel. Rail de color a la izquierda para diferenciar de un card generico. */
 .lexar-card {
-    background: #fffdf8;
+    background: #ffffff;
     border: 1px solid var(--lx-border);
     border-left: 4px solid var(--lx-accent);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
     margin-bottom: 0.6rem;
+    box-shadow: 0 1px 3px rgba(15, 27, 45, 0.06);
 }
 .lexar-card__title {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--lx-ink);
     margin-bottom: 0.15rem;
 }
@@ -115,13 +141,13 @@ h1, h2, h3, h4, .stApp [data-testid="stHeading"] h1, .stApp [data-testid="stHead
 }
 .lexar-card__meta a {
     color: var(--lx-primary);
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .lexar-disclaimer {
     background: var(--lx-primary-soft);
     border-left: 4px solid var(--lx-primary);
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 0.6rem 0.9rem;
     color: var(--lx-ink);
     font-size: 0.88rem;
