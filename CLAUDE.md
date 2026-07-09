@@ -299,6 +299,15 @@ unique fragments, **8,702/8,702** embeddings, **28,930** law<->case links across
   - **Gotcha**: SAIJ's `numero-interno` field comes back as either `int` or `str` depending on the fallo,
     which breaks `pyarrow`'s schema inference across checkpoint parts. Every scalar field is cast to
     `str` before writing (`_s()` helper in `saij.py`).
+  - **Gotcha, found 2026-07-09 via the app's "ver en SAIJ" link (real bug, not cosmetic)**: `fetch_fallo()`
+    built the public document URL as `{BASE_URL}/{friendly-url.description}` using only the SEO slug the
+    API returns. SAIJ's site (Struts2/Tomcat) actually requires the document's uuid as a **second path
+    segment**, `{BASE_URL}/{slug}/{uuid}` — without it, `DocumentDisplayAction.displayDisplay` throws a
+    server-side `NullPointerException` (HTTP 500). Confirmed by navigating both URL forms against the
+    live site and comparing to a working link found on saij.gob.ar's own homepage. Fixed in `saij.py`
+    (`url` now includes `/{uuid}`); the 1,234 already-scraped rows in `fallos_csjn.parquet` were patched
+    in place (slug was already correct, just needed the `/{uuid}` suffix appended) instead of
+    re-scraping.
 - Scraping is checkpointed like Fase 2 (part files, resumable) and polite (~0.4s between requests — no
   documented rate limit, unlike Vertex AI, so this is just good citizenship, not quota management).
 - Segmentation reuses `chunk_text()` directly (fallos have no `ARTICULO n` structure).
