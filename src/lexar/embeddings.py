@@ -76,6 +76,15 @@ def load_embedding_checkpoint(checkpoint_dir: Path) -> set[str]:
     return done
 
 
+def _next_part_index(checkpoint_dir: Path) -> int:
+    """Maximo indice existente + 1, no la CANTIDAD de archivos: si un checkpoint corrupto se
+    borra a mano (deja un hueco en la numeracion), `len(glob(...))` reutiliza un numero ya usado
+    y el siguiente `to_parquet` pisa un part file valido en silencio, perdiendo esos hashes sin
+    ningun error. Con el maximo, un hueco nunca colisiona con un archivo existente."""
+    indices = [int(p.stem.split("_")[1]) for p in checkpoint_dir.glob("part_*.parquet")]
+    return max(indices, default=-1) + 1
+
+
 def embed_corpus_checkpointed(
     fragments: pd.DataFrame,
     checkpoint_dir: Path,
@@ -96,7 +105,7 @@ def embed_corpus_checkpointed(
         return 0
 
     batches = [pending.iloc[i:i + batch_size] for i in range(0, len(pending), batch_size)]
-    next_part_index = len(list(checkpoint_dir.glob("part_*.parquet")))
+    next_part_index = _next_part_index(checkpoint_dir)
     buffer_hashes: list[str] = []
     buffer_vectors: list[np.ndarray] = []
     completed = failed = processed = 0

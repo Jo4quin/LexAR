@@ -319,7 +319,11 @@ implementacion esta en `PLAN.md`.
 - Embeddings con el mismo pipeline de la Fase 2 (`gemini-embedding-001`, checkpointing reanudable).
 - Vinculo ley↔fallo por similitud semantica contra el indice FAISS de leyes de la Fase 2.
 
-Detalle tecnico en `CLAUDE.md` y en `notebooks/Jurisprudencia_CSJN.ipynb`.
+Resultado (2026-07-09): **1.234 fallos** CSJN 2020-2026, **8.702 fragmentos** unicos, **8.702/8.702
+embeddings**, **28.930 vinculos** ley↔fallo entre 1.225 fallos y 2.743 normas. Dos hallazgos tecnicos no
+anticipados: un limite de profundidad de paginacion en el backend de SAIJ (resuelto paginando por año
+calendario via el facet `Fecha/<año>`) y un bug de colision de indices de checkpoint en el pipeline de
+embeddings (corregido). Detalle completo en `CLAUDE.md` y en `notebooks/Jurisprudencia_CSJN.ipynb`.
 
 ### Fase 5: Vinculos entre normas + resumenes IA — completa
 
@@ -328,7 +332,10 @@ Detalle tecnico en `CLAUDE.md` y en `notebooks/Jurisprudencia_CSJN.ipynb`.
 - Resumenes de cada vinculo generados por IA **on-demand con cache** (no batch masivo): se generan la
   primera vez que se consultan y quedan cacheados en `link_summaries.parquet`.
 
-Detalle tecnico en `notebooks/Vinculos_Normas.ipynb` y `src/lexar/summaries.py`.
+Resultado: **48.276 vinculos** (38.552 semanticos, 8.297 oficiales, 1.427 ambos). Sanity check contra la
+Ley 24.240 (Defensa del Consumidor): 20 vinculos, 18 modificaciones posteriores detectadas
+correctamente. Cache de resumenes verificado (la segunda consulta al mismo par no vuelve a llamar al
+LLM). Detalle tecnico en `notebooks/Vinculos_Normas.ipynb` y `src/lexar/summaries.py`.
 
 ### Fase 6: Chatbot RAG — completa
 
@@ -339,7 +346,9 @@ Detalle tecnico en `notebooks/Vinculos_Normas.ipynb` y `src/lexar/summaries.py`.
   cada cita es texto literal de la fuente.
 - Set de casos de prueba anotado a mano (`eval/casos_prueba.csv`) como ground truth de la Fase 8.
 
-Detalle tecnico en `src/lexar/chatbot.py`.
+Resultado: verificado end-to-end contra ambos indices FAISS (leyes + fallos). Sobre los 17 casos de
+prueba: **143 citas** generadas, **93,7% trazables** (verificadas textualmente contra la fuente
+citada). Detalle tecnico en `src/lexar/chatbot.py`.
 
 ### Fase 7: App Streamlit — completa
 
@@ -350,16 +359,23 @@ Detalle tecnico en `src/lexar/chatbot.py`.
   expandibles y verificacion visible.
 - **Home** (`app/Home.py`): estado de los datos generados por cada fase.
 
-Correr con `streamlit run app/Home.py` desde la raiz del repo.
+Correr con `streamlit run app/Home.py` desde la raiz del repo. Verificado (2026-07-09): las 3 paginas
+arrancan sin errores (HTTP 200, sin traceback en el log del servidor) — verificacion a nivel de
+arranque; falta una pasada manual de interaccion en navegador.
 
-### Fase 8: Evaluacion e informe
+### Fase 8: Evaluacion e informe — completa
 
 - Precision@K / Recall del chatbot sobre `casos_prueba.csv`, con y sin *query rewriting*.
 - Trazabilidad: porcentaje de citas del chatbot verificadas automaticamente contra la fuente.
 - Muestra estratificada para rubrica humana de calidad de los resumenes de vinculos.
 - Informe final con metodologia, limitaciones y ejemplos.
 
-Detalle tecnico en `notebooks/Evaluacion_Producto.ipynb`.
+Resultado (2026-07-09), sobre los 17 casos de `eval/casos_prueba.csv`: **Recall@10 73,5%** con query
+rewriting vs. **70,6%** sin — la mejora que justifica la decision de diseño. Precision@10 practicamente
+plana (10,0% vs. 9,4%), esperable dado que cada caso tiene solo 1-2 leyes esperadas frente a 10
+posiciones evaluadas. Trazabilidad de citas: **93,7%** (134/143). La rubrica humana de resumenes de
+vinculos (`outputs/eval/rubrica_resumenes.csv`) quedo generada pero sin completar — requiere revision
+manual del equipo. Detalle tecnico en `notebooks/Evaluacion_Producto.ipynb`.
 
 ## Entregables
 

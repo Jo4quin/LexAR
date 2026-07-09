@@ -68,12 +68,27 @@ class CorpusIndex:
 
 
 def build_index(embeddings: np.ndarray, chunk_rows: int = 20_000) -> faiss.IndexFlatIP:
-    """Agrega por chunks para acotar la memoria pico: con la matriz mmapeada, el unico bloque
-    grande vivo es la copia interna del indice."""
+    """Intenta un unico add() con toda la matriz (evita el costo de realloc+copy repetido que
+    hace `IndexFlatCodes` al crecer su buffer interno en cada add()). Si la maquina esta
+    demasiado justa de RAM para ese pico — este repo ya documenta MemoryErrors recurrentes en
+    desarrollo, ver CLAUDE.md — cae a agregar de a chunks con gc.collect() entre medio; agregar
+    de a partes no reduce el trabajo total de reallocacion pero sí el tamano de cada paso, lo
+    que puede alcanzar cuando no hay un bloque contiguo grande libre por fragmentacion."""
+    import gc
+
+    embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
     index = faiss.IndexFlatIP(embeddings.shape[1])
+    try:
+        index.add(embeddings)
+        return index
+    except MemoryError:
+        pass
+
+    index.reset()
+    gc.collect()
     for start in range(0, len(embeddings), chunk_rows):
-        chunk = np.ascontiguousarray(embeddings[start:start + chunk_rows], dtype=np.float32)
-        index.add(chunk)
+        index.add(embeddings[start:start + chunk_rows])
+        gc.collect()
     return index
 
 
