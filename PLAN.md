@@ -1,8 +1,27 @@
 # Plan de implementación: pivot a Asistente Jurídico para Abogados (Fases 4–8)
 
-> Documento de planificación del equipo — 8 de julio de 2026.
+> Documento de planificación del equipo — 8 de julio de 2026. Actualizado el 9 de julio de 2026
+> con los resultados finales de la implementación.
 > Complementa al `README.md` (que describe las Fases 1–3, ya completas) y lo reemplazará como
 > plan de trabajo vigente una vez validado por el equipo.
+
+## Resultado final (2026-07-09) — Fases 4-8 completas
+
+Todas las fases del pivot se implementaron y verificaron contra datos reales en la branch
+`pivot-asistente-juridico`:
+
+| Fase | Resultado |
+|---|---|
+| 6.1 — Core `src/lexar/` | 11 módulos extraídos/nuevos, importados por notebooks y app |
+| 4 — Jurisprudencia CSJN | 1.234 fallos (2020-2026), 8.702 fragmentos, 8.702/8.702 embeddings, 28.930 vínculos ley↔fallo |
+| 5 — Vínculos + resúmenes | 48.276 `norm_links` (38.552 semánticos, 8.297 oficiales, 1.427 ambos); resúmenes on-demand verificados con caché |
+| 6 — Chatbot RAG | Verificado end-to-end con ambos índices; 8/10 citas válidas en el ejemplo de referencia |
+| 7 — App Streamlit | Las 3 páginas arrancan sin errores (`streamlit run app/Home.py`, HTTP 200) |
+| 8 — Evaluación | Recall@10 73,5 % (con query rewriting) vs. 70,6 % (sin); trazabilidad de citas 93,7 % sobre 143 citas |
+
+Un hallazgo no anticipado en el plan original: un bug real de colisión de índices de checkpoint
+en `embeddings.py` (ver sección Fase 4 y `CLAUDE.md`), encontrado y corregido durante la
+implementación — no un problema de recursos de la máquina como parecía al principio.
 
 ## Contexto
 
@@ -74,7 +93,23 @@ Los notebooks nuevos importan desde `src/lexar/` en lugar de copiar código. `re
 
 ---
 
-## Fase 4 — Jurisprudencia CSJN (notebook `Jurisprudencia_CSJN.ipynb`)
+## Fase 4 — Jurisprudencia CSJN (notebook `Jurisprudencia_CSJN.ipynb`) — completa
+
+**Resultado real:** 1.234 fallos CSJN 2020-2026 (100 % `fetch_status=ok`), 8.702 fragmentos
+únicos, 8.702/8.702 embeddings, 28.930 vínculos ley↔fallo entre 1.225 fallos y 2.743 normas.
+
+**Dos hallazgos que no estaban en el plan original:**
+- *Límite de paginación de SAIJ*: paginar sobre los ~17.000 fallos con `o=`/`p=` devuelve HTTP
+  500 determinístico pasado offset ~1.000 (techo del backend, no un documento corrupto). Se
+  resolvió paginando por año calendario vía el facet `Fecha/<año>` (verificado exacto:
+  `Fecha/2020` → 248 resultados), manteniendo cada consulta muy por debajo del techo. Detalle
+  completo en `CLAUDE.md`.
+- *Bug de colisión de índices de checkpoint*: al borrar manualmente un checkpoint de embeddings
+  corrupto (por una escritura truncada durante un momento de disco lleno), la siguiente corrida
+  reutilizó ese número de archivo — `next_part_index = len(list(glob(...)))` cuenta archivos, no
+  calcula el máximo índice existente, así que un hueco en la numeración hace que el próximo
+  `to_parquet` pise un checkpoint válido en silencio. Corregido en `src/lexar/embeddings.py`
+  (`_next_part_index()` usa máximo+1). Ver `CLAUDE.md` para el detalle de diagnóstico.
 
 **4.1 Scraping SAIJ.** Contra `https://www.saij.gob.ar/busqueda` (JSON): facets
 `Tipo de Documento/Jurisprudencia/Fallo` + `Tribunal/CORTE SUPREMA DE JUSTICIA DE LA NACION`, paginando
@@ -105,7 +140,14 @@ del proyecto: **sin** `text_a`/`text_b` en la tabla bulk; texto solo en exports 
 **Smoke test:** constante `MAX_FALLOS` (None = todo) en el config cell, mismo patrón que
 `MAX_TEXT_VERSIONS`.
 
-## Fase 5 — Grafo de vínculos entre normas + resúmenes IA (notebook `Vinculos_Normas.ipynb`)
+## Fase 5 — Grafo de vínculos entre normas + resúmenes IA (notebook `Vinculos_Normas.ipynb`) — completa
+
+**Resultado real:** 48.276 vínculos (38.552 solo semánticos, 8.297 solo oficiales, 1.427 ambos).
+Distribución de `dominant_label`: 23.357 `neutral`, 11.575 `possible_modification`, 10.865
+`possible_overlap`, 2.277 `different_scope`, 192 `needs_review`, 10 `possible_conflict`. Sanity
+check contra la Ley 24.240 (Defensa del Consumidor): 20 vínculos, 18 modificaciones posteriores
+detectadas correctamente. Resúmenes on-demand precalentados sobre 8 pares de demo y verificados:
+la segunda llamada al mismo par sale del caché sin volver a llamar al LLM.
 
 **5.1 Consolidación a nivel documento.** Desde `analysis_candidates.parquet` (filtrado a similitud
 ≥0.957) agregar pares de fragmentos → pares de documentos (`n_fragment_pairs`, `max_sim`, `mean_sim`).
@@ -122,7 +164,13 @@ lo importe): función que recibe `doc_pair_key`, arma el prompt con metadatos de
 Caché en `outputs/link_summaries.parquet` (append, keyed por `doc_pair_key` + versión de prompt): si ya
 existe, no llama al LLM. El notebook precalienta los resúmenes de los ejemplos de la demo (~20–30 pares).
 
-## Fase 6 — Chatbot RAG (módulo `src/lexar/chatbot.py`)
+## Fase 6 — Chatbot RAG (módulo `src/lexar/chatbot.py`) — completa
+
+**Resultado real:** verificado end-to-end con `answer_case()` sobre los dos índices FAISS
+(112.582 fragmentos de leyes + 8.702 de fallos). Ejemplo de referencia ("me chocaron el auto y
+el otro conductor no tiene seguro"): reescritura a 2 consultas jurídicas, recuperó 6 leyes y 4
+fallos CSJN relevantes, generó respuesta citada con 8/10 citas válidas contra el texto fuente.
+Sobre los 17 casos de prueba completos (Fase 8): 143 citas totales, 93,7 % de trazabilidad.
 
 **6.1 Extracción del core a `src/lexar/`.** Copiar (no mover) `AdaptiveRateLimiter`,
 `embed_batch_with_retry`, la carga FAISS y `normalize_text` desde los notebooks a los módulos listados
@@ -147,7 +195,13 @@ arriba. Los notebooks viejos quedan intactos; código nuevo importa de `src`.
 auto, despido, alquiler, defensa del consumidor, etc.) con las leyes esperadas anotadas a mano por el
 equipo (columnas `caso`, `leyes_esperadas`, `notas`). Es el ground truth de la evaluación de Fase 8.
 
-## Fase 7 — App Streamlit (`app/`)
+## Fase 7 — App Streamlit (`app/`) — completa
+
+**Resultado real:** las 3 páginas (`Home`, `Explorador`, `Chatbot`) arrancan sin errores —
+`streamlit run app/Home.py` responde HTTP 200 en las tres rutas, sin traceback en el log del
+servidor. Verificación a nivel de arranque/smoke test; queda pendiente una pasada manual de
+interacción en navegador (buscar una ley, pedir un resumen, hacer una consulta al chatbot) para
+quien continúe el trabajo.
 
 **Explorador (`pages/1_Explorador.py`):**
 
@@ -169,17 +223,27 @@ detectar de un vistazo si falta correr una fase).
 Carga de datos con `@st.cache_resource` (FAISS + parquets se cargan una vez). Correr con
 `streamlit run app/Home.py` desde el repo root; reusar la lógica de resolución de `ROOT` de `config.py`.
 
-## Fase 8 — Evaluación e informe (notebook `Evaluacion_Producto.ipynb`)
+## Fase 8 — Evaluación e informe (notebook `Evaluacion_Producto.ipynb`) — completa
 
-- **Precision@K / Recall del retrieval** sobre `casos_prueba.csv`: ¿las leyes esperadas aparecen en el
-  top-K del chatbot? Reportar con y sin query rewriting (ablation barata que justifica la decisión).
-- **Calidad de resúmenes de vínculos**: rúbrica humana (correcto/útil/citas verificables) sobre una
-  muestra estratificada por `link_source` × `dominant_label` — mismo enfoque que el golden set de Fase 3.
-- **Trazabilidad**: % de citas del chatbot que pasan la validación automática de quotes (6.2.4).
-- **Actualización de documentación**: reescribir la sección "Plan de trabajo" del `README.md` (Fases 4–5
-  viejas → marcadas como reemplazadas por el pivot; nuevas Fases 4–8 con su estado) y la sección de
-  objetivo general (producto para abogados). Actualizar `CLAUDE.md`: nueva estructura `src/`/`app/`,
-  outputs nuevos, esquema de `data/jurisprudencia_csjn/`, gotcha del facet `Tribunal`.
+**Resultado real** (sobre los 17 casos de `eval/casos_prueba.csv`, guardado en
+`outputs/eval/ablation_query_rewrite.csv` y `outputs/eval/citation_traceability.csv`):
+
+- **Precision@10**: 10,0 % sin query rewriting vs. 9,4 % con — prácticamente sin diferencia. Es
+  un número bajo esperable: el conjunto de leyes esperadas por caso es chico (1-2 normas) frente
+  a las 10 posiciones evaluadas, así que precision@10 castiga estructuralmente incluso a un
+  retrieval que encuentra todo lo relevante.
+- **Recall@10**: 70,6 % sin rewriting vs. **73,5 % con rewriting** — la mejora real que justifica
+  la decisión de diseño: reescribir el caso coloquial a lenguaje jurídico ayuda a que las leyes
+  esperadas aparezcan en algún lugar del top-10, que es la métrica que más importa para un
+  chatbot de investigación (el usuario ve la lista completa, no solo el primer resultado).
+- **Trazabilidad de citas**: 93,7 % (134 de 143 citas) son texto literal verificable contra el
+  fragmento fuente citado.
+- La rúbrica humana de resúmenes de vínculos (`outputs/eval/rubrica_resumenes.csv`) quedó armada
+  por el notebook pero sin completar — requiere revisión manual del equipo, no es automatizable.
+
+- **Actualización de documentación**: `README.md` y `CLAUDE.md` reescritos con el pivot completo,
+  la nueva estructura `src/`/`app/`/`eval/`, y los gotchas técnicos encontrados (facet `Tribunal`,
+  límite de paginación de SAIJ, bug de colisión de índices de checkpoint).
 
 ## Orden de ejecución y dependencias
 

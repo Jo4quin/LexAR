@@ -268,11 +268,12 @@ flagged `possible_conflict` → 84 confirmed on verification. Final distribution
 Full design rationale in `PLAN.md`. Shared code lives in `src/lexar/` (see repository layout above) —
 new notebooks and the app import from there instead of duplicating the Fase 1-3 notebook cells.
 
-### Fase 4 — Jurisprudencia CSJN (`notebooks/Jurisprudencia_CSJN.ipynb`, `src/lexar/saij.py`)
+### Fase 4 — Jurisprudencia CSJN (`notebooks/Jurisprudencia_CSJN.ipynb`, `src/lexar/saij.py`) — DONE
 
 Scope agreed with the team on 2026-07-08: **only CSJN (Corte Suprema) rulings, 2020 onward**, not all
-of SAIJ's jurisprudence. Verified against the live API that day: SAIJ has 16,977 total CSJN fallos, of
-which ~1,261 are dated 2020+.
+of SAIJ's jurisprudence. Final run (2026-07-09): **1,234 fallos** (100% `fetch_status=ok`), **8,702**
+unique fragments, **8,702/8,702** embeddings, **28,930** law<->case links across 1,225 fallos and
+2,743 laws.
 
 - **API discovered by exploration** (same family of endpoints that produced `saij_texts.csv`):
   - Search: `https://www.saij.gob.ar/busqueda?o=<offset>&p=<page_size>&f=<facets>&s=fecha-rango|DESC`.
@@ -283,23 +284,43 @@ which ~1,261 are dated 2020+.
   - PDF download: `https://www.saij.gob.ar/descarga-archivo?guid=<pdf_uuid>&name=<file>`. Extracted with
     `pypdf`; a handful of pages have no text layer (`fetch_status = 'pdf_no_text'`) and are excluded
     rather than crashing the run.
-  - **Gotcha**: SAIJ's search pagination returns a deterministic HTTP 500 for certain offset/page-size
-    combinations (observed reproducibly at `o=1000, p=100` — not a transient rate-limit issue, retrying
-    the same request never helps). `_search_page_resilient()` in `saij.py` binary-splits the page on a
-    persistent 500 until it isolates and skips the single problematic offset, instead of aborting the
-    whole scrape.
+  - **Gotcha, central and non-obvious**: SAIJ's search pagination returns a deterministic HTTP 500 past
+    offset ~1000 (reproduced repeatedly at `o=1000, p=100` — not transient, retrying never helps). The
+    first fix attempted was `_search_page_resilient()` binary-splitting the page on a persistent 500 to
+    isolate and skip individual bad offsets — this seemed to work in a first probe, but running it for
+    real revealed the *entire* range past offset 1000 fails, not one corrupt document: it's a hard
+    pagination-depth ceiling on SAIJ's backend (typical of Elasticsearch/Solr with a low
+    `max_result_window`), not a data quirk. **The actual fix**: query one calendar year at a time via the
+    `Fecha/<year>` facet (confirmed exact: `Fecha/2020` returns precisely 248 results, matching the known
+    per-year facet breakdown). Since CSJN has at most ~250 fallos/year, every per-year query stays well
+    under the 1000-offset ceiling. `search_fallo_uuids(since_year, until_year)` in `saij.py` implements
+    this; the old offset-skipping bisection in `_search_page_resilient()` is still used *within* each
+    year's pagination as a defense-in-depth fallback, not as the primary strategy.
   - **Gotcha**: SAIJ's `numero-interno` field comes back as either `int` or `str` depending on the fallo,
     which breaks `pyarrow`'s schema inference across checkpoint parts. Every scalar field is cast to
     `str` before writing (`_s()` helper in `saij.py`).
-- Scraping is checkpointed like Fase 2 (part files, resumable), stops after a run of consecutive fallos
-  older than the cutoff date, and is polite (~0.4s between requests — no documented rate limit, unlike
-  Vertex AI, so this is just good citizenship, not quota management).
+- Scraping is checkpointed like Fase 2 (part files, resumable) and polite (~0.4s between requests — no
+  documented rate limit, unlike Vertex AI, so this is just good citizenship, not quota management).
 - Segmentation reuses `chunk_text()` directly (fallos have no `ARTICULO n` structure).
 - Embeddings reuse the exact Fase 2 pipeline (`embed_corpus_checkpointed()` / `consolidate_embeddings()`
   in `src/lexar/embeddings.py`) — same model, same `SEMANTIC_SIMILARITY` task type, same 768d.
 - Law<->case links (`build_law_case_links()` in `links.py`): each case fragment searched against the
   Fase 2 FAISS law index, aggregated to `(document_id, case_id)`. Same memory rule as
   `analysis_candidates`: no `text_a`/`text_b` in the bulk table.
+
+**Gotcha found finishing this fase, real bug not a resource issue**: while retrying the embedding run
+after a disk-full incident (see below), a manually-deleted corrupted checkpoint part
+(`part_000007.parquet`) left a gap in the numbering. `embed_corpus_checkpointed()`'s next-file-index
+logic was `len(list(checkpoint_dir.glob("part_*.parquet")))` — a *count*, not a max index. With a gap,
+that count collides with an existing higher-numbered file, and the next `to_parquet()` call **silently
+overwrites** a valid checkpoint (parquet writes don't error on overwrite). This looked exactly like a
+disk-space problem — the "missing embeddings" count flip-flopped instead of monotonically decreasing
+across retries — until traced to this. Fixed in `embeddings.py` with `_next_part_index()`, which computes
+`max(existing indices, default=-1) + 1`. **If a checkpoint file is ever deleted by hand for any reason,
+this class of bug can recur wherever the same `len(glob(...))` pattern is used** — the original Fase 2
+notebook cell 19 has the identical pattern, never fixed there since nobody deleted a checkpoint file
+during that phase's development (the notebook is intentionally left untouched, per this file's own
+"Fases 1-3 don't get touched" convention — this is a latent, dormant bug there, not misinformation).
 
 Local data layout (gitignored, not documented in the shared data package's `LEEME.md` since it's
 generated by this project, not part of the original Infoleg/SAIJ handoff):
@@ -314,7 +335,7 @@ outputs/jurisprudencia/
   law_case_links.parquet     # (document_id, case_id) pairs by similarity
 ```
 
-### Fase 5 — Vinculos entre normas (`notebooks/Vinculos_Normas.ipynb`, `src/lexar/links.py`, `summaries.py`)
+### Fase 5 — Vinculos entre normas (`notebooks/Vinculos_Normas.ipynb`, `src/lexar/links.py`, `summaries.py`) — DONE
 
 `build_norm_links()` aggregates Fase 2's fragment-level `analysis_candidates` and Fase 3's
 `candidate_classifications` up to document level, outer-joined with Infoleg's official `relations.csv`
@@ -322,6 +343,12 @@ graph so a norm's official modifications show up even without a semantic match. 
 `outputs/norm_links.parquet`, one row per `(document_id_a, document_id_b)` pair with `link_source`
 (`semantic` / `official` / `both`), `dominant_label` (mode of `final_label`, excluding
 `rule:boilerplate` votes), and up to 3 sample explanations.
+
+**Result (2026-07-09)**: 48,276 links (38,552 semantic-only, 8,297 official-only, 1,427 both).
+`dominant_label` distribution: 23,357 `neutral`, 11,575 `possible_modification`, 10,865
+`possible_overlap`, 2,277 `different_scope`, 192 `needs_review`, 10 `possible_conflict`. Sanity check
+against Ley 24.240 (Defensa del Consumidor, `infoleg:638`, a heavily-amended law): 20 links, 18
+correctly detected as later official modifications.
 
 **Gotcha**: `relations.csv` has ~115k of its 126k rows with an empty `source_document_id` or
 `target_document_id` (relations whose other end falls outside the Ley/Decreto-Ley corpus scope) — must
@@ -334,7 +361,7 @@ job — generated the first time someone opens that link in the app. `LinkSummar
 handles both the generation and the cache read/write; the notebook only pre-warms a handful of demo
 examples.
 
-### Fase 6 — Chatbot RAG (`src/lexar/chatbot.py`)
+### Fase 6 — Chatbot RAG (`src/lexar/chatbot.py`) — DONE
 
 `answer_case()`: (1) an LLM call rewrites the colloquial case into 1-3 formal legal-language queries
 (`rewrite_query()` — this is why re-embedding the corpus with `RETRIEVAL_*` task types wasn't needed:
@@ -345,7 +372,16 @@ citation is checked automatically against the source fragment's normalized text
 (`normalize_text()` from `segmentation.py`) — this backs the Fase 8 traceability metric and the app's
 citation checkmarks.
 
-### Fase 7 — Streamlit app (`app/`)
+**Result (2026-07-09)**: verified end-to-end against both live FAISS indices (112,582 law fragments +
+8,702 case fragments). Reference example ("me chocaron el auto y el otro conductor no tiene seguro"):
+rewrote to 2 legal-language queries, retrieved 6 relevant laws and 4 CSJN fallos, generated a cited
+answer with 8/10 valid citations. Across the full 17-case eval set (Fase 8): 143 citations total, 93.7%
+traceable. Minor known refinement opportunity, not fixed: the model occasionally emits multiple
+fragment IDs inside one citation bracket (e.g. `[cfrag:X, cfrag:Y]`), which the current validation
+logic treats as a single (invalid) source id instead of splitting it — likely responsible for some of
+the ~6% untraceable citations.
+
+### Fase 7 — Streamlit app (`app/`) — DONE (boot-verified)
 
 Run with `streamlit run app/Home.py` from the repo root. Each page resolves `src/` the same way as the
 notebooks (walks up from `Path(__file__)` looking for `src/lexar`). `Home.py` shows a data-readiness
@@ -354,7 +390,12 @@ table (row counts per artifact) so it's obvious at a glance which phase still ne
 table with an "Explicar relación (IA)" button wired to `LinkSummarizer`, and related CSJN fallos.
 `2_Chatbot.py` wraps `answer_case()` in a chat UI with per-citation ✅/❌ validity icons.
 
-### Fase 8 — Evaluation (`notebooks/Evaluacion_Producto.ipynb`)
+**Verification done**: `python -m streamlit run app/Home.py` boots cleanly (HTTP 200 on `/`,
+`/Explorador`, `/Chatbot`, no traceback in server logs). This is a boot-level smoke test, not a
+click-through of the actual UI flows (search a law, request a summary, ask the chatbot) — that manual
+pass is still open for whoever picks this up next.
+
+### Fase 8 — Evaluation (`notebooks/Evaluacion_Producto.ipynb`) — DONE
 
 Uses `eval/casos_prueba.csv` (17 hand-annotated colloquial cases with expected `numero_norma` values,
 matched to `document_id` via `document_identifiers.csv`) to compute Precision@K/Recall@K for the
@@ -362,7 +403,17 @@ chatbot's retrieval, with an ablation comparing raw-query vs. rewritten-query re
 query-rewriting design decision with a number instead of just intuition). Also computes the % of
 chatbot citations that pass automatic quote validation, and produces a stratified sample
 (`outputs/eval/rubrica_resumenes.csv`) for manual review of link-summary quality, following the same
-stratified-sampling pattern as Fase 3's golden set.
+stratified-sampling pattern as Fase 3's golden set (that rubric was generated but left unlabeled — it
+needs a human pass, same as Fase 3's `human_label` column).
+
+**Result (2026-07-09)**, saved to `outputs/eval/ablation_query_rewrite.csv` and
+`outputs/eval/citation_traceability.csv`:
+- Precision@10: 10.0% without rewriting vs. 9.4% with — essentially flat. Expected: each case has only
+  1-2 expected laws, so precision@10 is structurally low regardless of retrieval quality.
+- **Recall@10: 70.6% without rewriting vs. 73.5% with rewriting** — the number that actually validates
+  the query-rewriting design decision, since for a research-assistant chatbot recall (does the right law
+  show up anywhere in the list the user sees) matters more than precision.
+- Citation traceability: 93.7% (134/143).
 
 ## Cross-cutting gotchas from the pivot
 
@@ -379,3 +430,12 @@ stratified-sampling pattern as Fase 3's golden set.
   `REPO_DIR` is always the actual git checkout the code lives in (`Path(__file__).resolve().parents[2]`),
   used only for versioned files like `eval/casos_prueba.csv`. Don't conflate the two — pointing
   `CASOS_PRUEBA_PATH` at `ROOT` would silently read a stale copy from a different worktree.
+- **Disk-full during embedding runs writes silently-truncated parquet checkpoints**: during Fase 4's
+  embedding run the C: drive filled to 0 bytes free. `to_parquet()` calls did not always raise an
+  exception on the truncated writes — the process would print a success message and even report "0
+  batches discarded," but `consolidate_embeddings()`'s post-hoc integrity check (missing-hash count)
+  would still be nonzero, and would *not* monotonically decrease across retries. If you see that
+  pattern (missing count going up as often as down across reruns), check `df -h` before assuming a code
+  bug — this looked identical to the separate checkpoint-index-collision bug above until both were
+  diagnosed in the same session; they compounded (the collision bug persisted after disk space was
+  freed, since it wasn't disk-related at all).

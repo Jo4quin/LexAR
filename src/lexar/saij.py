@@ -30,11 +30,12 @@ USER_AGENT = "LexAR-academico/1.0 (proyecto NLP UdeSA)"
 REQUEST_SLEEP_SECONDS = 0.4
 
 
-def _get(url: str, timeout: int = 60, max_retries: int = 4) -> bytes:
-    """SAIJ devuelve 500 esporadicos bajo uso normal (no rate limiting); un retry corto
-    alcanza. Se usa tanto para la paginacion de busqueda como para documentos individuales —
-    si la paginacion misma falla persistentemente, se deja propagar para no perder progreso
-    en silencio (el caller reanuda desde checkpoints en la proxima corrida)."""
+def _get(url: str, timeout: int = 30, max_retries: int = 1) -> bytes:
+    """max_retries=1 por defecto (sin reintento) a proposito: `_search_page_resilient` llama
+    esto en cada nivel de su recursion, y reintentar-antes-de-dividir multiplica el backoff por
+    la profundidad del arbol (7 niveles para paginas de 100) — un solo bad uuid llegaba a tardar
+    minutos. Los documentos individuales (`fetch_fallo`) sí necesitan reintento real, y lo piden
+    explicitamente con max_retries>1."""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     for attempt in range(max_retries):
         time.sleep(REQUEST_SLEEP_SECONDS)
@@ -47,15 +48,15 @@ def _get(url: str, timeout: int = 60, max_retries: int = 4) -> bytes:
             time.sleep(2.0 * (attempt + 1))
 
 
-def _get_json(url: str) -> dict:
-    return json.loads(_get(url).decode("utf-8", errors="replace"))
+def _get_json(url: str, max_retries: int = 1) -> dict:
+    return json.loads(_get(url, max_retries=max_retries).decode("utf-8", errors="replace"))
 
 
-def _search_page(offset: int, page_size: int) -> list[str]:
+def _search_page(offset: int, page_size: int, facets: str) -> list[str]:
     params = {
         "o": offset,
         "p": page_size,
-        "f": FACETS_FALLOS_CSJN,
+        "f": facets,
         "s": "fecha-rango|DESC",
         "v": "colapsada",
     }
@@ -64,14 +65,14 @@ def _search_page(offset: int, page_size: int) -> list[str]:
     return [doc["uuid"] for doc in (results.get("documentResultList") or [])]
 
 
-def _search_page_resilient(offset: int, page_size: int) -> list[str]:
-    """SAIJ devuelve 500 de forma deterministica para ciertos rangos de offset/page_size
-    (probablemente un documento puntual con datos corruptos en el indice de busqueda), no solo
-    como fallo transitorio: reintentar con el mismo page_size no alcanza. Ante un 500
-    persistente, se subdivide el rango a la mitad hasta encontrar el/los uuids problematicos, y
-    esos offsets individuales se saltean (logueados) en vez de abortar todo el scraping."""
+def _search_page_resilient(offset: int, page_size: int, facets: str) -> list[str]:
+    """SAIJ devuelve 500 de forma deterministica en ciertos rangos, no solo como fallo
+    transitorio: reintentar con el mismo page_size no alcanza. Ante un 500, se subdivide el
+    rango a la mitad hasta aislar el problema, que se saltea (logueado) en vez de abortar toda
+    la busqueda. Sin retry en los niveles intermedios (ver `_get`) — solo la hoja final
+    (page_size 1) reintenta, para no pagar el backoff en cada nivel de la recursion."""
     try:
-        return _search_page(offset, page_size)
+        return _search_page(offset, page_size, facets)
     except urllib.error.HTTPError as exc:
         if exc.code < 500:
             raise
@@ -79,21 +80,40 @@ def _search_page_resilient(offset: int, page_size: int) -> list[str]:
             print(f"  aviso: offset {offset} devuelve 500 persistente, se saltea 1 resultado")
             return []
         left_size = page_size // 2
-        left = _search_page_resilient(offset, left_size)
-        right = _search_page_resilient(offset + left_size, page_size - left_size)
+        left = _search_page_resilient(offset, left_size, facets)
+        right = _search_page_resilient(offset + left_size, page_size - left_size, facets)
         return left + right
 
 
-def search_fallo_uuids(page_size: int = 100, max_pages: int = 500):
-    """Genera UUIDs de fallos CSJN en orden fecha DESC, pidiendo paginas de a una (lazy:
-    quien consume corta cuando llega a fallos anteriores al rango buscado, sin listar los
-    ~17k uuids historicos). La fecha real se lee despues del view-document de cada fallo,
-    porque el resultado de busqueda colapsado no la incluye."""
-    for page in range(max_pages):
-        docs = _search_page_resilient(page * page_size, page_size)
-        if not docs:
-            return
-        yield from docs
+def search_fallo_uuids(since_year: int, until_year: int, page_size: int = 100):
+    """Genera UUIDs de fallos CSJN, un anio a la vez (facet `Fecha/<anio>`, descubierto por
+    exploracion de la API: filtra exactamente a ese anio calendario, con counts de ~100-250 por
+    anio para la CSJN).
+
+    Gotcha central de esta funcion: paginar SIN el filtro de anio, directamente sobre los
+    ~17.000 fallos totales via `o=`/`p=`, devuelve HTTP 500 deterministico en offsets >= ~1000
+    (confirmado reproduciendo el mismo offset varias veces) — no es un limite de un documento
+    puntual corrupto, es un techo de profundidad de paginacion del backend de SAIJ (tipico de
+    Elasticsearch/Solr con `max_result_window` bajo). Acotar cada query a un anio calendario
+    mantiene cada rango bien por debajo de ese techo, evitando el problema de raiz en vez de
+    parchearlo reintentando offsets profundos."""
+    for year in range(until_year, since_year - 1, -1):
+        facets = f"{FACETS_FALLOS_CSJN}|Fecha/{year}"
+        offset = 0
+        year_count = 0
+        while True:
+            docs = _search_page_resilient(offset, page_size, facets)
+            if not docs:
+                break
+            yield from docs
+            year_count += len(docs)
+            offset += page_size
+            if len(docs) < page_size:
+                # Ultima pagina real (menos resultados que el page_size pedido): no hace falta
+                # pedir la siguiente, que devolveria 500 (offset > total) y se resolveria via
+                # bisistribuir ~100 sub-rangos vacios en la resiliente — caro y evitable.
+                break
+        print(f"  anio {year}: {year_count} uuids listados")
 
 
 def extract_pdf_text(pdf_bytes: bytes) -> str:
@@ -113,7 +133,7 @@ def fetch_fallo(uuid: str) -> dict:
     """Baja metadata + texto (PDF) de un fallo. Nunca lanza: los errores quedan en fetch_status."""
     row = {"case_id": f"saij:{uuid}", "saij_uuid": uuid, "fetch_status": "ok", "full_text": ""}
     try:
-        raw = _get_json(f"{BASE_URL}/view-document?guid={uuid}")
+        raw = _get_json(f"{BASE_URL}/view-document?guid={uuid}", max_retries=3)
         document = json.loads(raw["data"])["document"]
         content = document.get("content", {})
         friendly = (document.get("metadata", {}).get("friendly-url") or {}).get("description", "")
@@ -137,7 +157,7 @@ def fetch_fallo(uuid: str) -> dict:
         pdf_url = f"{BASE_URL}/descarga-archivo?" + urllib.parse.urlencode(
             {"guid": texto_doc["uuid"], "name": texto_doc.get("file-name", "doc.pdf")}
         )
-        text = extract_pdf_text(_get(pdf_url))
+        text = extract_pdf_text(_get(pdf_url, max_retries=3))
         if len(text.strip()) < 200:
             row["fetch_status"] = "pdf_no_text"
         row["full_text"] = text
@@ -156,46 +176,39 @@ def _load_fetched_uuids(parts_dir: Path) -> set[str]:
 def scrape_fallos_csjn(
     parts_dir: Path,
     since: str = "2020-01-01",
+    until_year: int | None = None,
     max_fallos: int | None = None,
     checkpoint_every: int = 50,
 ) -> None:
-    """Corrida completa reanudable: lista uuids, saltea los ya bajados, corta en `since`.
+    """Corrida completa reanudable: lista uuids anio por anio (ver `search_fallo_uuids`), saltea
+    los ya bajados en checkpoints previos, filtra por `since` al consolidar (algun fallo del
+    anio limite puede quedar afuera si `since` no es 1ro de enero)."""
+    import datetime
 
-    Como la busqueda viene en fecha DESC, el corte por fecha se aplica al consolidar; aca se
-    dejan de pedir documentos nuevos cuando una racha de `checkpoint_every` fallos consecutivos
-    quedo antes de `since` (margen para fechas levemente desordenadas en el indice de SAIJ).
-    """
     parts_dir.mkdir(parents=True, exist_ok=True)
     already = _load_fetched_uuids(parts_dir)
     print(f"Ya bajados en checkpoints previos: {len(already):,}")
 
+    since_year = int(since[:4])
+    until_year = until_year or datetime.date.today().year
+
     buffer: list[dict] = []
     next_part = len(list(parts_dir.glob("part_*.parquet")))
     fetched = 0
-    consecutive_old = 0
 
-    for uuid in search_fallo_uuids():
+    for uuid in search_fallo_uuids(since_year, until_year):
         if uuid in already:
             continue
         row = fetch_fallo(uuid)
         buffer.append(row)
         fetched += 1
 
-        fecha = row.get("fecha") or ""
-        if fecha and fecha < since:
-            consecutive_old += 1
-        else:
-            consecutive_old = 0
-
         if len(buffer) >= checkpoint_every:
             pd.DataFrame(buffer).to_parquet(parts_dir / f"part_{next_part:06d}.parquet", index=False)
             next_part += 1
             buffer = []
-            print(f"  checkpoint: {fetched:,} fallos bajados en esta corrida (ultima fecha: {fecha})")
+            print(f"  checkpoint: {fetched:,} fallos bajados en esta corrida")
 
-        if consecutive_old >= checkpoint_every:
-            print(f"Corte: {consecutive_old} fallos consecutivos anteriores a {since}.")
-            break
         if max_fallos is not None and fetched >= max_fallos:
             print(f"Corte: MAX_FALLOS={max_fallos} alcanzado (smoke test).")
             break
