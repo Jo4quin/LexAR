@@ -1,6 +1,7 @@
 """Explorador de leyes: ficha de la norma, normas vinculadas con resumen IA, fallos CSJN."""
 from __future__ import annotations
 
+import html
 import json
 import sys
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 for _base in [Path(__file__).resolve().parent, *Path(__file__).resolve().parents]:
     if (_base / "src" / "lexar").exists():
         sys.path.insert(0, str(_base / "src"))
+        sys.path.insert(0, str(_base / "app"))
         break
 
 import pandas as pd
@@ -17,8 +19,10 @@ from lexar import config
 from lexar.links import count_later_modifications, links_for_document, load_norm_links
 from lexar.summaries import LinkSummarizer
 from lexar.textfix import fix_display_text
+from style import badge, inject_css
 
 st.set_page_config(page_title="LexAR — Explorador", page_icon="📚", layout="wide")
+inject_css()
 st.title("📚 Explorador de leyes")
 
 
@@ -44,7 +48,20 @@ def load_summarizer() -> LinkSummarizer:
 documents, norm_links, texts, law_case_links, fallos = load_data()
 titles = documents.set_index("document_id")["titulo_resumido"]
 
-query = st.text_input("Buscar norma por título o id (ej: defensa del consumidor, infoleg:638)")
+# Persistidos en claves propias de session_state (no solo la key automatica del widget): Streamlit
+# limpia el estado de los widgets de una pagina que no se renderiza en un run, asi que sin esto la
+# busqueda se perdia al ir al Chatbot y volver.
+if "expl_query" not in st.session_state:
+    st.session_state.expl_query = ""
+if "expl_document_id" not in st.session_state:
+    st.session_state.expl_document_id = None
+
+query = st.text_input(
+    "Buscar norma por título o id (ej: defensa del consumidor, infoleg:638)",
+    value=st.session_state.expl_query,
+    key="expl_query_widget",
+)
+st.session_state.expl_query = query
 if not query:
     st.info("Escribí parte del título de una norma para empezar.")
     st.stop()
@@ -64,8 +81,18 @@ options = {
     f"{row['titulo_resumido'][:90]} — {row['tipo_norma']} ({row['fecha_sancion']}) [{row['document_id']}]": row["document_id"]
     for _, row in matches.iterrows()
 }
-selected = st.selectbox(f"Resultados ({len(matches)}):", list(options))
+option_labels = list(options)
+default_index = 0
+for i, label in enumerate(option_labels):
+    if options[label] == st.session_state.expl_document_id:
+        default_index = i
+        break
+
+selected = st.selectbox(
+    f"Resultados ({len(matches)}):", option_labels, index=default_index, key="expl_selected_widget"
+)
 document_id = options[selected]
+st.session_state.expl_document_id = document_id
 doc = documents.set_index("document_id").loc[document_id]
 
 st.divider()
@@ -143,10 +170,20 @@ else:
         fallos_meta = fallos.set_index("case_id")
         for _, r in related.iterrows():
             f = fallos_meta.loc[r["case_id"]]
-            caratula = fix_display_text(f"{f['actor']} c/ {f['demandado']} s/ {f['sobre']}")
-            with st.container(border=True):
-                st.markdown(
-                    f"**{caratula[:160]}**  \n"
-                    f"{f['tipo_fallo']} · {f['fecha']} · similitud {r['max_similarity']:.3f}"
-                    + (f" · [ver en SAIJ]({f['url']})" if f.get("url") else "")
-                )
+            caratula = html.escape(fix_display_text(f"{f['actor']} c/ {f['demandado']} s/ {f['sobre']}")[:160])
+            tipo_fallo = html.escape(str(f["tipo_fallo"]))
+            fecha = html.escape(str(f["fecha"]))
+            sim_badge = badge(f"similitud {r['max_similarity']:.3f}", "primary")
+            link_html = (
+                f' · <a href="{html.escape(str(f["url"]), quote=True)}" target="_blank">ver en SAIJ ↗</a>'
+                if f.get("url")
+                else ""
+            )
+            st.markdown(
+                f'<div class="lexar-card">'
+                f'<div class="lexar-card__title">{caratula}</div>'
+                f'<div class="lexar-card__meta">{tipo_fallo} · {fecha}{link_html}</div>'
+                f'<div style="margin-top:0.35rem">{sim_badge}</div>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
