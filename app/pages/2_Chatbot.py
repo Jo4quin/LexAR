@@ -7,6 +7,7 @@ from pathlib import Path
 for _base in [Path(__file__).resolve().parent, *Path(__file__).resolve().parents]:
     if (_base / "src" / "lexar").exists():
         sys.path.insert(0, str(_base / "src"))
+        sys.path.insert(0, str(_base / "app"))
         break
 
 import streamlit as st
@@ -15,10 +16,22 @@ from lexar import config
 from lexar.chatbot import DISCLAIMER, answer_case
 from lexar.retrieval import load_case_index, load_law_index
 from lexar.textfix import fix_display_text
+from style import disclaimer_banner, inject_css
 
 st.set_page_config(page_title="LexAR — Chatbot", page_icon="💬", layout="wide")
-st.title("💬 Chatbot jurídico")
-st.caption(DISCLAIMER)
+inject_css()
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+header_cols = st.columns([5, 1])
+header_cols[0].title("💬 Chatbot jurídico")
+if header_cols[1].button(
+    "🔄 Nueva conversación", use_container_width=True, disabled=not st.session_state.chat_history
+):
+    st.session_state.chat_history = []
+    st.rerun()
+disclaimer_banner(DISCLAIMER)
 
 
 @st.cache_resource(show_spinner="Cargando índices de búsqueda (una sola vez)…")
@@ -31,9 +44,6 @@ def load_indexes():
 law_index, case_index = load_indexes()
 if case_index is None:
     st.warning("Índice de fallos no disponible (correr la Fase 4). El chatbot responderá solo con leyes.")
-
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
 
 for turn in st.session_state.chat_history:
     with st.chat_message(turn["role"]):
