@@ -1,25 +1,42 @@
 # LexAR
 
-LexAR es un proyecto academico para la materia **Procesamiento de Lenguaje Natural**. El objetivo es construir una base de conocimiento sobre normativa nacional argentina y usarla para detectar posibles redundancias, contradicciones o solapamientos entre normas. A partir de ese trabajo, el proyecto tambien explora un asistente legal capaz de ayudar a redactar, revisar y desafiar escritos legales usando evidencia normativa recuperada del corpus.
+LexAR es un proyecto academico para la materia **Procesamiento de Lenguaje Natural**. Construye una
+base de conocimiento sobre normativa nacional argentina (embeddings semanticos, grafo de vinculos,
+clasificacion de relaciones entre normas) y la usa como motor de un **Asistente Juridico para
+Abogados**: explorador de leyes con normas vinculadas y resumenes generados por IA, jurisprudencia de
+la Corte Suprema (SAIJ, desde 2020), y un chatbot que responde casos en lenguaje natural con citas
+normativas verificadas.
+
+> **Pivot (2026-07-08):** el proyecto arranco con un enfoque de deteccion de redundancias y
+> contradicciones (Fases 1-3, completas, descriptas mas abajo) y a partir de ahi se redirecciono hacia
+> el producto para abogados. Las Fases 1-3 **no se descartan** — son la base del producto: los
+> embeddings y el grafo de vinculos son el motor de retrieval, y el motor LLM de clasificacion se
+> reusa para generar los resumenes de vinculos. El plan de implementacion completo del pivot
+> (Fases 4-8) esta en `PLAN.md`.
 
 ## Objetivo general
 
-Construir un pipeline de PLN que transforme textos legales argentinos en una base consultable por fragmentos, detecte normas semanticamente cercanas y clasifique pares candidatos segun el tipo de relacion juridico-linguistica que presentan.
+Construir un pipeline de PLN que transforme textos legales argentinos y fallos de la Corte Suprema en
+una base consultable por fragmentos, detecte normas semanticamente cercanas y vinculadas oficialmente,
+y ponga ese conocimiento al servicio de un asistente juridico para abogados.
 
-La demo esperada debe mostrar:
+El producto (demo) debe mostrar:
 
-- ejemplos de posibles contradicciones, redundancias o solapamientos encontrados;
-- evidencia textual de los articulos o fragmentos involucrados;
-- una explicacion generada por modelo;
-- una propuesta de redaccion alternativa o texto de reemplazo que reduzca la ambiguedad o duplicacion detectada.
+- un explorador de leyes con sus normas vinculadas (oficiales y semanticas) y jurisprudencia relevante
+  de la CSJN desde 2020;
+- un resumen generado por IA que explica por que dos normas estan relacionadas y su relevancia
+  juridica;
+- un chatbot que, dado un caso en lenguaje natural, devuelve las leyes aplicables, la normativa
+  relacionada y los fallos relevantes, con citas textuales verificadas contra la fuente.
 
 ## Ideas principales
 
-### 1. Deteccion de redundancias y contradicciones normativas
+### 1. Deteccion de redundancias y contradicciones normativas (Fases 1-3, completas)
 
-La primera linea del proyecto busca analizar leyes nacionales argentinas para encontrar relaciones problematicas entre fragmentos normativos.
+La primera linea del proyecto analizo leyes nacionales argentinas para encontrar relaciones
+problematicas entre fragmentos normativos.
 
-Se consideran relevantes, entre otros, estos casos:
+Se consideraron relevantes, entre otros, estos casos:
 
 - contradicciones directas entre obligaciones, prohibiciones, permisos o procedimientos;
 - normas viejas no derogadas que entren en tension con normas posteriores;
@@ -28,18 +45,21 @@ Se consideran relevantes, entre otros, estos casos:
 - excepciones que vuelven ambigua una regla general;
 - normas que regulan lo mismo o son funcionalmente equivalentes aunque esten redactadas de manera distinta.
 
-El sistema no parte de la idea de afirmar automaticamente que existe una contradiccion juridica definitiva. En el MVP, el resultado debe entenderse como una **hipotesis priorizada para revision humana**.
+El sistema no parte de la idea de afirmar automaticamente que existe una contradiccion juridica
+definitiva — el resultado se entiende como una **hipotesis priorizada para revision humana**. Esta
+clasificacion (`possible_conflict`, `possible_overlap`, etc.) sigue viva como una de las senales que
+alimentan los vinculos entre normas del producto (Fase 5), ya no como el objetivo final del proyecto.
 
-### 2. Asistente legal sobre la base de conocimiento
+### 2. Asistente juridico para abogados (Fases 4-8, el pivot actual)
 
-La segunda linea reutiliza el corpus, los embeddings, los clusters y los analisis previos para crear un asistente legal. El asistente deberia poder ayudar a:
+La segunda linea reutiliza el corpus, los embeddings y la clasificacion de la primera para construir
+un asistente juridico orientado a la investigacion, no a la redaccion. El asistente permite:
 
-- redactar una primera version de un escrito legal;
-- revisar un escrito existente;
-- encontrar fundamentos normativos;
-- detectar argumentos debiles o normas potencialmente conflictivas;
-- sugerir contraargumentos;
-- proponer mejoras de redaccion con citas al corpus usado.
+- explorar una ley y ver sus normas vinculadas, con un resumen IA de cada relacion;
+- consultar la jurisprudencia de la Corte Suprema (SAIJ, desde 2020) asociada a una norma;
+- plantear un caso en lenguaje natural y recibir el marco legal aplicable, con fuentes citadas.
+
+Ver `PLAN.md` para el detalle de implementacion de cada fase.
 
 Para el alcance inicial, esta idea queda como extension natural del trabajo principal. El foco inmediato es construir una buena base de conocimiento y una demo de deteccion + propuesta de redaccion alternativa.
 
@@ -285,37 +305,69 @@ Distribucion final: 25.017 `possible_overlap`, 24.868 `neutral`, 14.077 `possibl
 `different_scope`, 397 `needs_review`, 84 `possible_conflict`. Detalle tecnico completo en `CLAUDE.md`
 (seccion "Notebook architecture (Fase 3)").
 
-### Fase 4: Redaccion alternativa
+### Fase 4 (vieja) y Fase 5 (vieja): reemplazadas por el pivot
 
-- Para casos relevantes, pedir al modelo una propuesta de armonizacion o reemplazo.
-- Exigir que la propuesta cite los fragmentos usados.
-- Comparar resultados manualmente.
+Las fases "Redaccion alternativa" e "Informe y demo" que originalmente seguian a la deteccion de
+contradicciones quedan **reemplazadas** por las Fases 4-8 del pivot (abajo). El detalle completo de
+implementacion esta en `PLAN.md`.
 
-### Fase 5: Informe y demo
+### Fase 4: Jurisprudencia CSJN (SAIJ) — completa
 
-- Preparar ejemplos representativos.
-- Mostrar metodologia de punta a punta.
-- Incluir limitaciones.
-- Presentar metricas simples de evaluacion.
+- Scraping de fallos de la Corte Suprema publicados en SAIJ, 2020 en adelante (via la API JSON de
+  SAIJ; el texto completo viene como PDF, extraido con `pypdf`).
+- Segmentacion con el mismo `chunk_text()` de la Fase 1 (los fallos no tienen estructura de articulos).
+- Embeddings con el mismo pipeline de la Fase 2 (`gemini-embedding-001`, checkpointing reanudable).
+- Vinculo ley↔fallo por similitud semantica contra el indice FAISS de leyes de la Fase 2.
+
+Detalle tecnico en `CLAUDE.md` y en `notebooks/Jurisprudencia_CSJN.ipynb`.
+
+### Fase 5: Vinculos entre normas + resumenes IA — completa
+
+- Consolidacion de `analysis_candidates` (Fase 2) y `candidate_classifications` (Fase 3) a nivel
+  documento, unida con el grafo oficial de modificaciones de Infoleg → `norm_links.parquet`.
+- Resumenes de cada vinculo generados por IA **on-demand con cache** (no batch masivo): se generan la
+  primera vez que se consultan y quedan cacheados en `link_summaries.parquet`.
+
+Detalle tecnico en `notebooks/Vinculos_Normas.ipynb` y `src/lexar/summaries.py`.
+
+### Fase 6: Chatbot RAG — completa
+
+- Extraccion del core compartido (rate limiter, embeddings, retrieval FAISS) a `src/lexar/`, reusado
+  tanto por los notebooks nuevos como por la app.
+- Pipeline del chatbot: *query rewriting* (caso coloquial → consultas en lenguaje juridico) →
+  retrieval sobre leyes y fallos → respuesta con citas obligatorias → validacion automatica de que
+  cada cita es texto literal de la fuente.
+- Set de casos de prueba anotado a mano (`eval/casos_prueba.csv`) como ground truth de la Fase 8.
+
+Detalle tecnico en `src/lexar/chatbot.py`.
+
+### Fase 7: App Streamlit — completa
+
+- **Explorador** (`app/pages/1_Explorador.py`): busqueda de norma, ficha con advertencia de vigencia,
+  tabla de normas vinculadas con boton "Explicar relacion" (resumen IA on-demand), fallos CSJN
+  relacionados.
+- **Chatbot** (`app/pages/2_Chatbot.py`): interfaz de chat sobre el pipeline de la Fase 6, con citas
+  expandibles y verificacion visible.
+- **Home** (`app/Home.py`): estado de los datos generados por cada fase.
+
+Correr con `streamlit run app/Home.py` desde la raiz del repo.
+
+### Fase 8: Evaluacion e informe
+
+- Precision@K / Recall del chatbot sobre `casos_prueba.csv`, con y sin *query rewriting*.
+- Trazabilidad: porcentaje de citas del chatbot verificadas automaticamente contra la fuente.
+- Muestra estratificada para rubrica humana de calidad de los resumenes de vinculos.
+- Informe final con metodologia, limitaciones y ejemplos.
+
+Detalle tecnico en `notebooks/Evaluacion_Producto.ipynb`.
 
 ## Entregables
 
-- Base de fragmentos legales segmentados.
-- Indice de embeddings.
-- Tabla de candidatos recuperados.
-- Tabla de analisis clasificados.
-- Ejemplos curados de contradiccion, redundancia o solapamiento.
-- Propuestas de redaccion alternativa.
+- Base de fragmentos legales segmentados (leyes y fallos CSJN).
+- Indices de embeddings (leyes y jurisprudencia).
+- Grafo de vinculos entre normas, con resumenes generados por IA.
+- Chatbot juridico con citas verificadas.
+- App Streamlit (explorador + chatbot).
+- Metricas de evaluacion (precision/recall de retrieval, trazabilidad de citas).
 - Informe academico-tecnico.
-- Demo reproducible en notebook o aplicacion minima.
-
-## Proxima decision
-
-La decision tecnica mas importante es fijar el **snapshot principal** y el **subconjunto inicial**.
-
-Recomendacion:
-
-1. Usar `lexar_dataset_2026-06-25/data/processed/text_corpus/text_versions.parquet` como base inicial por su mayor cobertura documentada.
-2. Empezar con una muestra tematica o temporal para reducir ruido.
-3. Validar manualmente los primeros 20 a 50 pares recuperados antes de escalar.
 
