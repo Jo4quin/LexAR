@@ -16,3 +16,9 @@ venv/
 
 # Entorno
 .env
+
+# Material de estudio personal (no es parte del entregable del proyecto).
+/docspropios/
+
+# Paquete temporal para compartir outputs/ por fuera de git (ver README.md/CLAUDE.md).
+/outputs.zip
