@@ -8,6 +8,13 @@ API descubierta el 2026-07-08 (misma familia de endpoints que produjo saij_texts
 - PDF: https://www.saij.gob.ar/descarga-archivo?guid=<pdf-uuid>&name=<file-name>
   Los fallos >=2020 son PDFs digitales; el texto se extrae con pypdf. Si un PDF no tiene capa
   de texto (escaneado), el fallo queda con fetch_status='pdf_no_text' en vez de romper la corrida.
+
+Gotcha de la URL publica (encontrado 2026-07-09, el link "ver en SAIJ" de la app tiraba 500): la API
+devuelve `friendly-url.description` como slug SEO, pero armar la URL como `{BASE_URL}/{slug}` sola no
+alcanza — el sitio de SAIJ (Struts2/Tomcat) espera el uuid del documento como segundo segmento de la
+ruta, `{BASE_URL}/{slug}/{uuid}`. Sin el uuid, la accion del lado del servidor
+(`DocumentDisplayAction.displayDisplay`) revienta con `NullPointerException` (HTTP 500). Confirmado
+navegando ambas variantes contra el sitio real.
 """
 from __future__ import annotations
 
@@ -148,7 +155,7 @@ def fetch_fallo(uuid: str) -> dict:
             "numero_interno": _s(content.get("numero-interno")),
             "id_infojus": _s(content.get("id-infojus")),
             "sumarios_relacionados": json.dumps(content.get("sumarios-relacionados", {}), ensure_ascii=False),
-            "url": f"{BASE_URL}/{friendly}" if friendly else "",
+            "url": f"{BASE_URL}/{friendly}/{uuid}" if friendly else "",
         })
         texto_doc = content.get("texto-doc") or {}
         if not texto_doc.get("uuid"):
