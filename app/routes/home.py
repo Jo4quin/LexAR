@@ -25,8 +25,13 @@ ARTIFACTS = [
 
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request):
+    artifacts = list(ARTIFACTS)
+    # El feedback lo genera la propia app al usarla — se lista solo si existe, para que no
+    # aparezca como "falta" (no hay ningun notebook que correr para generarlo).
+    if config.FEEDBACK_PATH.exists():
+        artifacts.append(("App", "Feedback del chatbot", config.FEEDBACK_PATH))
     rows = []
-    for fase, label, path in ARTIFACTS:
+    for fase, label, path in artifacts:
         exists = path.exists()
         num_rows = None
         if exists:

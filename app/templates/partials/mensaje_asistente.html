@@ -8,7 +8,7 @@
     Consultas derivadas: {{ consultas|join(" · ") }} — materia: {{ materia }}
   </p>
 
-  <div class="prosa">{{ respuesta_markdown|md }}</div>
+  <div class="prosa">{{ respuesta_html }}</div>
 
   <details class="mt-4 border-t border-line">
     <summary>Citas textuales — {{ citas_validas }}/{{ citas|length }} verificadas contra la fuente</summary>
@@ -17,7 +17,7 @@
       <li class="flex items-start gap-3">
         <span class="sello {{ 'sello-verde' if c.cita_valida else 'sello-off' }} mt-1 shrink-0">{{ "Verificada" if c.cita_valida else "No verificada" }}</span>
         <div>
-          <span class="font-mono text-[11px] text-tinta">[{{ c.fuente_id }}]</span>
+          <span class="font-mono text-[11px]">[{{ c.ids_html }}]</span>
           <span class="font-display italic text-sm text-ink-soft">“{{ c.cita_textual|fix }}”</span>
         </div>
       </li>
@@ -68,6 +68,24 @@
   </details>
   {% endif %}
 
-  <p class="text-[11px] text-ink-soft mt-3 pt-3 border-t border-line">{{ disclaimer }}</p>
+  <div class="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-line">
+    <p class="text-[11px] text-ink-soft flex-1 min-w-60">{{ disclaimer }}</p>
+    <form hx-post="/chatbot/feedback" hx-swap="outerHTML" class="flex items-center gap-2 shrink-0">
+      <input type="hidden" name="caso" value="{{ caso }}">
+      <input type="hidden" name="materia" value="{{ materia }}">
+      <input type="hidden" name="citas_validas" value="{{ citas_validas }}">
+      <input type="hidden" name="citas_total" value="{{ citas|length }}">
+      <span class="font-mono text-[10.5px] uppercase tracking-[0.1em] text-ink-soft">¿Fue útil?</span>
+      <button type="submit" name="voto" value="up" aria-label="Respuesta útil"
+              class="border border-line rounded-sm px-2.5 py-1 text-sm hover:border-verde hover:bg-verde-wash transition-colors cursor-pointer">👍</button>
+      <button type="submit" name="voto" value="down" aria-label="Respuesta no útil"
+              class="border border-line rounded-sm px-2.5 py-1 text-sm hover:border-rojo hover:bg-rojo-wash transition-colors cursor-pointer">👎</button>
+    </form>
+  </div>
 </div>
+<script>
+  if (window.historial) {
+    window.historial.push({ role: "assistant", content: {{ respuesta_markdown|tojson }} });
+  }
+</script>
 {% endif %}
