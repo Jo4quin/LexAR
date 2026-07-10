@@ -94,18 +94,23 @@ def get_summarizer() -> LinkSummarizer:
 
 
 def _load_conflictos() -> pd.DataFrame:
-    """Los 84 pares possible_conflict de la Fase 3, con el texto de ambos fragmentos.
-    Los textos se leen con un filtro isin sobre pyarrow.dataset — NUNCA cargar la columna
-    `text` completa de embedding_fragments (regla de memoria del CLAUDE.md)."""
+    """Los pares possible_conflict confirmados por la re-verificacion de la Fase 3
+    (criterio v2 por default — ver config.CLASSIFICATIONS_VERSION), con el texto de ambos
+    fragmentos. Los textos se leen con un filtro isin sobre pyarrow.dataset — NUNCA cargar la
+    columna `text` completa de embedding_fragments (regla de memoria del CLAUDE.md)."""
     import pyarrow.dataset as ds
 
-    cls = pd.read_parquet(
-        config.CLASSIFICATIONS_PATH,
-        columns=[
-            "fragment_a_id", "fragment_b_id", "document_a_id", "document_b_id",
-            "similarity_score", "final_label", "final_confidence", "final_explanation",
-        ],
-    )
+    import pyarrow.parquet as pq
+
+    base_cols = [
+        "fragment_a_id", "fragment_b_id", "document_a_id", "document_b_id",
+        "similarity_score", "final_label", "final_confidence", "final_explanation",
+    ]
+    schema_cols = set(pq.read_schema(config.CLASSIFICATIONS_PATH).names)
+    cols = base_cols + (["escenario_conflicto"] if "escenario_conflicto" in schema_cols else [])
+    cls = pd.read_parquet(config.CLASSIFICATIONS_PATH, columns=cols)
+    if "escenario_conflicto" not in cls.columns:
+        cls["escenario_conflicto"] = ""
     conflictos = cls[cls["final_label"] == "possible_conflict"].copy()
     frag_ids = list(set(conflictos["fragment_a_id"]) | set(conflictos["fragment_b_id"]))
     dataset = ds.dataset(config.EMBEDDING_FRAGMENTS_PATH)

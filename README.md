@@ -305,6 +305,34 @@ Distribucion final: 25.017 `possible_overlap`, 24.868 `neutral`, 14.077 `possibl
 `different_scope`, 397 `needs_review`, 84 `possible_conflict`. Detalle tecnico completo en `CLAUDE.md`
 (seccion "Notebook architecture (Fase 3)").
 
+### Fase 3.5: re-verificacion de conflictos, criterio "instrumentos paralelos" — completa (2026-07-10)
+
+Al usar la app se detecto que la mayoria de los 84 `possible_conflict` no eran contradicciones
+reales sino **instrumentos paralelos**: tratados bilaterales de Argentina con una contraparte
+distinta cada uno (convenios de doble imposicion, extradicion, traslado de condenados), donde
+reglas distintas por pais son normales, no un conflicto. El prompt de verificacion original nunca
+veia el resumen de la norma completa (donde esta el pais/beneficiario) ni exigia el test decisivo:
+pueden ambas normas aplicar a la vez a la misma situacion y los mismos sujetos?
+
+`notebooks/Reverificacion_Conflictos.ipynb` re-verifica los 834 pares en cuestion (440 marcados en
+triage + 394 `needs_review`) con un prompt v2 que agrega ese contexto, enumera la doctrina de
+instrumentos paralelos, y exige un campo `escenario_conflicto` (la situacion concreta de colision;
+si el modelo no puede describirla, no es conflicto). Los sobrevivientes se confirman con
+`gemini-2.5-pro`.
+
+**Resultado**: 730 de 834 pares (87,5%) pasaron a `different_scope`; de los 6 que sobrevivieron a
+la primera pasada, `gemini-2.5-pro` confirmo 4. **84 → 4 conflictos confirmados**, todos con un
+`escenario_conflicto` concreto: dos leyes que aprueban versiones textualmente distintas del mismo
+articulo de un convenio; dos leyes que renumeran los mismos articulos del Codigo Penal (306-308) a
+numeros incompatibles; dos regimenes jubilatorios especiales con haberes distintos (85% vs 82%)
+para el mismo personal; y dos normas ambientales con multas supletorias incompatibles para la misma
+infraccion.
+
+`outputs/candidate_classifications.parquet` (v1) nunca se sobreescribe — todo lo nuevo vive en
+archivos `_v2` y `config.CLASSIFICATIONS_VERSION` (default `"v2"`) es el unico punto de corte;
+volver a v1 es cambiar esa constante y reiniciar el server, verificado sin perdida de datos.
+Detalle tecnico completo en `CLAUDE.md` (seccion "Fase 3.5").
+
 ### Fase 4 (vieja) y Fase 5 (vieja): reemplazadas por el pivot
 
 Las fases "Redaccion alternativa" e "Informe y demo" que originalmente seguian a la deteccion de
@@ -362,10 +390,10 @@ Jinja2, HTMX para la interactividad y Tailwind CSS (CDN v4), con identidad visua
   boton "Explicar IA" por fila (resumen on-demand con cache), **mapa de vinculos** (grafo
   interactivo del vecindario normativo, con vinculos entre vecinos, via vis-network) y fallos
   CSJN relacionados.
-- **Hallazgos** (`app/routes/hallazgos.py`): los 84 pares *possible_conflict* confirmados por la
-  verificacion de la Fase 3, agrupados por par de normas, con explicacion del verificador,
-  ambos fragmentos y boton "Explicar IA" — la conexion visible del producto con la mision
-  original del proyecto.
+- **Hallazgos** (`app/routes/hallazgos.py`): los pares *possible_conflict* confirmados (4, tras
+  el re-criterio de la Fase 3.5 — ver arriba), agrupados por par de normas, con explicacion del
+  verificador, el escenario concreto de colision, ambos fragmentos y boton "Explicar IA" — la
+  conexion visible del producto con la mision original del proyecto.
 - **Chatbot** (`app/routes/chatbot.py`): chat **multi-turno** (las repreguntas se entienden en
   contexto) sobre el pipeline de la Fase 6, con **progreso en vivo por etapa** (reescritura →
   busqueda → redaccion, via polling HTMX), **citas clickeables** (frag → ficha de la norma,
