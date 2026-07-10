@@ -5,20 +5,56 @@
 <p class="font-mono text-[11px] tracking-[0.18em] uppercase text-tinta mb-2">Explorador · 30.061 normas nacionales</p>
 <h1 class="font-display text-3xl mb-6">Buscar una norma</h1>
 
-<div class="relative">
-  <input type="search" name="q" value="{{ q }}"
-         placeholder="Título o id — defensa del consumidor, alquileres, infoleg:638…"
-         hx-get="/explorador" hx-trigger="input changed delay:300ms, search" hx-target="#resultados"
-         hx-push-url="true" hx-indicator="#buscando"
-         autofocus autocomplete="off" aria-label="Buscar norma por título o id"
-         class="w-full bg-surface border border-line rounded-sm px-4 py-3.5 text-[1rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none">
-  <div id="buscando" class="htmx-indicator absolute right-4 top-1/2 -translate-y-1/2">
-    <span class="puntos"><span></span><span></span><span></span></span>
+<form id="form-busqueda" hx-get="/explorador" hx-target="#resultados" hx-push-url="true" hx-indicator="#buscando">
+  <div class="flex items-center gap-1 mb-3" role="radiogroup" aria-label="Modo de búsqueda">
+    {% for valor, nombre in [("titulo", "Por título"), ("tema", "Por tema (semántica)")] %}
+    <label class="cursor-pointer">
+      <input type="radio" name="modo" value="{{ valor }}" class="sr-only peer" {{ "checked" if modo == valor }}>
+      <span class="inline-block font-mono text-[11px] tracking-[0.12em] uppercase px-3 py-1.5 rounded-sm border border-line text-ink-soft
+                   peer-checked:bg-tinta peer-checked:text-white peer-checked:border-tinta transition-colors">{{ nombre }}</span>
+    </label>
+    {% endfor %}
   </div>
-</div>
+  <div class="relative flex gap-2">
+    <input type="search" name="q" value="{{ q }}" id="input-q"
+           placeholder="Título o id — defensa del consumidor, alquileres, infoleg:638…"
+           hx-get="/explorador" hx-trigger="input[esModoTitulo()] changed delay:300ms"
+           hx-include="closest form" hx-target="#resultados" hx-push-url="true" hx-indicator="#buscando"
+           autofocus autocomplete="off" aria-label="Buscar norma"
+           class="flex-1 bg-surface border border-line rounded-sm px-4 py-3.5 text-[1rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none">
+    <button type="submit"
+            class="bg-tinta text-white font-mono text-[11px] tracking-[0.14em] uppercase px-5 rounded-sm hover:bg-tinta-deep transition-colors cursor-pointer">
+      Buscar
+    </button>
+    <div id="buscando" class="htmx-indicator absolute right-24 top-1/2 -translate-y-1/2">
+      <span class="puntos"><span></span><span></span><span></span></span>
+    </div>
+  </div>
+  <p id="nota-tema" class="text-xs text-ink-soft mt-2 {{ '' if modo == 'tema' else 'hidden' }}">
+    La búsqueda por tema encuentra normas por contenido («protección de datos personales») aunque el
+    título no coincida. Se ejecuta con Enter o el botón; la primera vez carga el índice (~30-60 s).
+  </p>
+</form>
 
 <div id="resultados" class="mt-6">
   {% include "partials/resultados_busqueda.html" %}
 </div>
+
+<script>
+  function esModoTitulo() {
+    return document.querySelector('input[name="modo"]:checked').value === "titulo";
+  }
+  const notaTema = document.getElementById("nota-tema");
+  const inputQ = document.getElementById("input-q");
+  document.querySelectorAll('input[name="modo"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      notaTema.classList.toggle("hidden", esModoTitulo());
+      inputQ.placeholder = esModoTitulo()
+        ? "Título o id — defensa del consumidor, alquileres, infoleg:638…"
+        : "Tema o situación — protección de datos personales, contratos de alquiler…";
+      inputQ.focus();
+    });
+  });
+</script>
 
 {% endblock %}

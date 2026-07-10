@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Hallazgos — LexAR{% endblock %}
+{% block content %}
+
+<p class="font-mono text-[11px] tracking-[0.18em] uppercase text-tinta mb-2">Hallazgos · Fases 1–3 del proyecto</p>
+<h1 class="font-display text-3xl mb-3">Posibles conflictos normativos</h1>
+<p class="text-[0.95rem] leading-relaxed text-ink-soft max-w-3xl">
+  El pipeline analizó <span class="font-mono text-sm">679.720</span> pares de fragmentos por similitud
+  semántica; un clasificador LLM de dos niveles marcó <span class="font-mono text-sm">440</span> como
+  posibles conflictos y la verificación con el modelo más fuerte confirmó
+  <span class="font-mono text-sm">{{ n_pares }}</span> (en {{ n_grupos }} pares de normas). Dato
+  llamativo: el 100&nbsp;% son normas <em>sin</em> vínculo oficial registrado en Infoleg — las
+  contradicciones reales aparecen entre normas que no se conocen entre sí.
+</p>
+
+<div class="mt-4 border-l-[3px] border-tinta bg-tinta-wash/60 px-4 py-3 text-sm max-w-3xl">
+  <span class="font-display">§</span> «Posible conflicto» es una señal para revisión profesional,
+  no un dictamen: puede tratarse de regímenes especiales, excepciones o ámbitos distintos.
+</div>
+
+<div class="mt-8 space-y-4">
+  {% for g in grupos %}
+  <article class="bg-surface border border-line border-l-[3px] border-l-rojo rounded-sm p-5">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
+        <p class="font-display text-[1.05rem] leading-snug">
+          <a href="/explorador/norma/{{ g.doc_a }}" class="hover:text-tinta">{{ g.titulo_a[:80] }}</a>
+          <span class="text-rojo mx-1">⚡</span>
+          <a href="/explorador/norma/{{ g.doc_b }}" class="hover:text-tinta">{{ g.titulo_b[:80] }}</a>
+        </p>
+        <p class="font-mono text-[10.5px] text-ink-soft mt-1">{{ g.doc_a }} · {{ g.doc_b }} · {{ g.pares|length }} fragmento{{ "s" if g.pares|length != 1 else "" }} en conflicto</p>
+      </div>
+      <button hx-post="/explorador/norma/{{ g.doc_a }}/resumen"
+              hx-vals='{"other_document_id": "{{ g.doc_b }}"}'
+              hx-target="#resumen-{{ loop.index }}" hx-indicator="#cargando-{{ loop.index }}"
+              hx-disabled-elt="this" hx-swap="innerHTML"
+              class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-tinta border border-tinta/40 rounded-sm px-2.5 py-1 hover:bg-tinta hover:text-white transition-colors disabled:opacity-40 whitespace-nowrap cursor-pointer shrink-0">
+        Explicar IA
+      </button>
+    </div>
+
+    {% for p in g.pares %}
+    <div class="mt-3 pt-3 border-t border-line">
+      <p class="text-sm leading-relaxed">{{ p.explicacion }}</p>
+      <p class="font-mono text-[10.5px] text-ink-soft mt-1">similitud {{ p.similitud }} · confianza del verificador {{ p.confianza }}</p>
+      <details class="mt-1">
+        <summary>Ver ambos fragmentos</summary>
+        <div class="grid md:grid-cols-2 gap-3 py-2">
+          <blockquote class="border-l-[3px] border-line pl-3 text-[13px] leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">{{ p.text_a }}</blockquote>
+          <blockquote class="border-l-[3px] border-line pl-3 text-[13px] leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">{{ p.text_b }}</blockquote>
+        </div>
+      </details>
+    </div>
+    {% endfor %}
+
+    <div id="cargando-{{ loop.index }}" class="htmx-indicator items-center gap-3 mt-3 text-sm text-ink-soft">
+      <span class="puntos"><span></span><span></span><span></span></span>
+      Generando explicación…
+    </div>
+    <div id="resumen-{{ loop.index }}" class="mt-3"></div>
+  </article>
+  {% endfor %}
+</div>
+
+{% endblock %}

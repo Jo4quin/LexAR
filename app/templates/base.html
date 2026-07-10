@@ -147,7 +147,7 @@ summary:hover { color: var(--color-tinta-deep); }
     <a href="/" class="font-display text-[1.35rem] leading-none py-3">Lex<span class="text-tinta-bright">AR</span><span class="text-tinta-bright text-sm align-top ml-0.5">§</span></a>
     {% set path = request.url.path %}
     <nav class="flex">
-      {% for href, nombre in [("/", "Inicio"), ("/explorador", "Explorador"), ("/chatbot", "Chatbot")] %}
+      {% for href, nombre in [("/", "Inicio"), ("/explorador", "Explorador"), ("/hallazgos", "Hallazgos"), ("/chatbot", "Chatbot")] %}
       {% set activo = (path == href) if href == "/" else path.startswith(href) %}
       <a href="{{ href }}"
          class="px-4 py-4 font-mono text-[11px] tracking-[0.16em] uppercase border-b-2 transition-colors
