@@ -7,10 +7,19 @@
 <p class="text-[0.95rem] leading-relaxed text-ink-soft max-w-3xl">
   El pipeline analizó <span class="font-mono text-sm">679.720</span> pares de fragmentos por similitud
   semántica; un clasificador LLM de dos niveles marcó <span class="font-mono text-sm">440</span> como
-  posibles conflictos y la verificación con el modelo más fuerte confirmó
-  <span class="font-mono text-sm">{{ n_pares }}</span> (en {{ n_grupos }} pares de normas). Dato
-  llamativo: el 100&nbsp;% son normas <em>sin</em> vínculo oficial registrado en Infoleg — las
-  contradicciones reales aparecen entre normas que no se conocen entre sí.
+  posibles conflictos.
+  {% if criterio_version == "v2" %}
+  Una re-verificación con criterio de ámbito de aplicación (descarta instrumentos paralelos — p. ej.
+  tratados bilaterales con contrapartes distintas, que no son contradicción aunque el texto se
+  parezca) confirmó
+  {% else %}
+  La verificación con el modelo más fuerte confirmó
+  {% endif %}
+  <span class="font-mono text-sm">{{ n_pares }}</span> (en {{ n_grupos }} pares de normas).
+  {% if pct_sin_vinculo_oficial %}
+  Dato llamativo: el {{ pct_sin_vinculo_oficial }}&nbsp;% son normas <em>sin</em> vínculo oficial
+  registrado en Infoleg — las contradicciones reales aparecen entre normas que no se conocen entre sí.
+  {% endif %}
 </p>
 
 <div class="mt-4 border-l-[3px] border-tinta bg-tinta-wash/60 px-4 py-3 text-sm max-w-3xl">
@@ -42,6 +51,9 @@
     {% for p in g.pares %}
     <div class="mt-3 pt-3 border-t border-line">
       <p class="text-sm leading-relaxed">{{ p.explicacion }}</p>
+      {% if p.escenario %}
+      <p class="text-sm leading-relaxed mt-1 text-ink-soft"><span class="font-display text-ink">¿Cuándo colisionan?</span> {{ p.escenario }}</p>
+      {% endif %}
       <p class="font-mono text-[10.5px] text-ink-soft mt-1">similitud {{ p.similitud }} · confianza del verificador {{ p.confianza }}</p>
       <details class="mt-1">
         <summary>Ver ambos fragmentos</summary>

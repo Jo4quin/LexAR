@@ -265,6 +265,58 @@ flagged `possible_conflict` → 84 confirmed on verification. Final distribution
 24,868 `neutral`, 14,077 `possible_modification`, 3,607 `different_scope`, 397 `needs_review`, 84
 `possible_conflict`.
 
+## Fase 3.5 — Re-verification of conflicts, "parallel instruments" criterion (2026-07-10)
+
+Browsing `/hallazgos` in the app surfaced a real quality problem: most of the 84 `possible_conflict`
+pairs above were not contradictions at all, but **parallel instruments** — mainly bilateral treaties
+with a different counterparty each (double-taxation conventions with Norway vs. Belgium vs. Finland...,
+extradition, prisoner transfer, investment protection). Argentina setting different terms with
+different countries is normal, not a conflict. Manual scan of the 75 document-pair groups found
+~55-60 fit this pattern exactly; the rest were other parallel-instrument cases (pensions to different
+beneficiaries, budgets for different fiscal years, charters of different entities) or generic
+boilerplate title pairs (`"MODIFICACION" <-> "MODIFICACION"`, `"RATIFICANSE" <-> "RATIFICASE"`).
+
+**Root cause**: the Fase 3 verification prompt (`Clasificacion_Candidatos.ipynb`, cell 14) only saw
+the two fragments' text + title — never `texto_resumido` (the norm's official one-line summary in
+`documents.csv`), which is exactly where the counterparty/beneficiary/period lives — and never
+instructed the decisive test: *can both norms apply to the same situation and the same subjects at
+the same time?*
+
+**Fix**: `notebooks/Reverificacion_Conflictos.ipynb` re-verifies the 834 pairs the Fase 3 triage had
+marked `possible_conflict` (440) or left `needs_review` (394 of 397 — 3 lacked a recorded
+`triage_label`) with a "v2" prompt that (1) adds each norm's `texto_resumido` as context, (2) states
+an explicit "parallel instruments" doctrine enumerating the patterns above as always `different_scope`
+unless the text says otherwise, and (3) requires a mandatory `escenario_conflicto` field — the
+concrete situation where both norms would apply and collide; if the model can't articulate one, it's
+not a conflict. Survivors are confirmed with `gemini-2.5-pro`.
+
+**Result (2026-07-10)**: of 834 re-verified pairs, 730 (87.5%) flipped to `different_scope`, 49 to
+`possible_modification`, 37 to `neutral`, 9 to `possible_overlap`; only 6 remained `possible_conflict`
+after flash-v2, and `gemini-2.5-pro` confirmed 4 of those 6 (the other 2 downgraded to
+`possible_modification`). **Final: 84 → 4 confirmed conflicts.** All 4 are genuine, concrete legal
+tensions with a well-formed `escenario_conflicto`: two laws approving textually different versions of
+the same treaty article; two laws renumbering the same Codigo Penal articles (306-308) to different,
+incompatible numbers; two special pension regimes with different benefit percentages (85% vs 82%)
+potentially covering the same personnel; and two environmental/fire-management laws with incompatible
+supplementary fine amounts potentially applicable to the same infraction. Smoke test before the full
+run (8 known parallel-instrument pairs + 3 random + 2 synthetic controls) confirmed the criterion
+isn't indiscriminately conservative: a synthetic same-scope, same-date contradiction with no
+modification relationship was still correctly classified `possible_conflict`.
+
+**Rollback design (v1 is never overwritten)**: `outputs/*.parquet` is gitignored, so patching the
+original file in place would have been unrecoverable if the new criterion turned out worse. Instead,
+everything new is written to separate `_v2` files (`candidate_classifications_v2.parquet`,
+`conflicts_top_v2.csv`, `norm_links_v2.parquet`; `outputs/classification_verify_v2/` and
+`classification_confirm_v2/` hold the checkpoints) — `candidate_classifications.parquet` (v1) is never
+touched. `config.CLASSIFICATIONS_VERSION` (env var `LEXAR_CLASSIFICATIONS_VERSION`, default `"v2"`)
+is the single switch between the two; reverting to v1 is changing that one constant and restarting
+the app, with zero recompute. Verified end-to-end: with the env var set to `"v1"`, `/hallazgos` shows
+the original 84 again exactly.
+
+`build_norm_links()` (`src/lexar/links.py`) gained optional `classifications_path`/`norm_links_path`
+parameters (default to the v1 constants) so Fase 5 can be rebuilt against either criterion without
+duplicating the function.
+
 ## The pivot: Fases 4-8 (legal assistant product)
 
 Full design rationale in `PLAN.md`. Shared code lives in `src/lexar/` (see repository layout above) —
@@ -361,6 +413,12 @@ graph so a norm's official modifications show up even without a semantic match. 
 against Ley 24.240 (Defensa del Consumidor, `infoleg:638`, a heavily-amended law): 20 links, 18
 correctly detected as later official modifications.
 
+**Rebuilt as `norm_links_v2.parquet` (2026-07-10)** against the v2 classification criterion (see
+"Fase 3.5" below) — same link count (48,276; the semantic/official pair structure doesn't depend on
+labels), but `dominant_label` now reflects the corrected conflict criterion. Ley 24.240 sanity check
+re-run and unchanged (20 links, 18 modifications) — the rework only touches `possible_conflict`
+labeling, not the modification graph.
+
 **Gotcha**: `relations.csv` has ~115k of its 126k rows with an empty `source_document_id` or
 `target_document_id` (relations whose other end falls outside the Ley/Decreto-Ley corpus scope) — must
 read with `dtype=str, keep_default_na=False` and filter empties before joining, or a mixed-type column
@@ -413,8 +471,9 @@ import time, same walk-up pattern the notebooks use.
   targeting a panel. LLM errors return an error partial, not a 500.
 - **Feature round 2 (2026-07-10, same session)**: semantic search (`modo=tema` embeds the query
   and searches the law FAISS index — Enter/button-triggered, never per-keystroke), `/hallazgos`
-  (the 84 verified `possible_conflict` pairs, texts fetched via `pyarrow.dataset` `isin` filter,
-  grouped by doc pair), an interactive **vis-network graph** on the norma page
+  (originally the 84 `possible_conflict` pairs, texts fetched via `pyarrow.dataset` `isin` filter,
+  grouped by doc pair; re-verified down to 4 genuine conflicts the same day — see "Fase 3.5" above),
+  an interactive **vis-network graph** on the norma page
   (`/explorador/norma/{id}/grafo.json`: center + top-20 neighbors + neighbor↔neighbor edges;
   lib loaded on demand on button click), and a chatbot upgrade: multi-turn (client-side JS
   `window.historial` posted as JSON, parsed defensively), live progress (POST enqueues a

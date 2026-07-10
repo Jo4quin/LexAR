@@ -30,7 +30,13 @@ def _doc_pair_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_norm_links() -> pd.DataFrame:
+def build_norm_links(
+    classifications_path=CLASSIFICATIONS_PATH,
+    norm_links_path=NORM_LINKS_PATH,
+) -> pd.DataFrame:
+    """classifications_path/norm_links_path opcionales para poder correr la Fase 5 sobre un
+    criterio de clasificacion alternativo (p.ej. candidate_classifications_v2.parquet ->
+    norm_links_v2.parquet) sin tocar los archivos v1 por default."""
     # 1. Pares semanticos agregados a nivel documento.
     candidates = pd.read_parquet(
         CANDIDATES_PATH,
@@ -50,7 +56,7 @@ def build_norm_links() -> pd.DataFrame:
     # 2. Etiqueta dominante y explicaciones de la Fase 3 (excluyendo boilerplate del voto:
     # una formula de cierre compartida no dice nada de la relacion juridica entre las normas).
     classifications = _doc_pair_columns(pd.read_parquet(
-        CLASSIFICATIONS_PATH,
+        classifications_path,
         columns=["document_a_id", "document_b_id", "final_label", "final_explanation", "rule_applied"],
     ))
     voting = classifications[classifications["rule_applied"] != "rule:boilerplate"]
@@ -100,7 +106,7 @@ def build_norm_links() -> pd.DataFrame:
     links = links.drop(columns="_merge")
     links.loc[links["link_source"] == "official", "dominant_label"] = "possible_modification"
     links["doc_pair_key"] = links["document_id_a"] + "|" + links["document_id_b"]
-    links.to_parquet(NORM_LINKS_PATH, index=False)
+    links.to_parquet(norm_links_path, index=False)
     print(
         f"norm_links: {len(links):,} vinculos "
         f"({(links['link_source'] == 'semantic').sum():,} semanticos, "

@@ -37,7 +37,15 @@ OUTPUT_DIR = ROOT / "outputs"
 EMBEDDINGS_NPY_PATH = OUTPUT_DIR / "embeddings.npy"
 EMBEDDING_FRAGMENTS_PATH = OUTPUT_DIR / "embedding_fragments.parquet"
 CANDIDATES_PATH = OUTPUT_DIR / "analysis_candidates.parquet"
-CLASSIFICATIONS_PATH = OUTPUT_DIR / "candidate_classifications.parquet"
+
+# Criterio de clasificacion de conflictos servido por la app. "v1" = verificacion original de la
+# Fase 3 (candidate_classifications.parquet); "v2" = re-verificacion con contexto de norma completa
+# y test de "instrumentos paralelos" (candidate_classifications_v2.parquet) — ver
+# notebooks/Reverificacion_Conflictos.ipynb. v1 nunca se sobreescribe: volver a "v1" alcanza para
+# revertir sin re-correr nada.
+CLASSIFICATIONS_VERSION = os.environ.get("LEXAR_CLASSIFICATIONS_VERSION", "v2")
+_CLASSIFICATIONS_SUFFIX = "" if CLASSIFICATIONS_VERSION == "v1" else f"_{CLASSIFICATIONS_VERSION}"
+CLASSIFICATIONS_PATH = OUTPUT_DIR / f"candidate_classifications{_CLASSIFICATIONS_SUFFIX}.parquet"
 
 # Fase 4 — jurisprudencia CSJN.
 JURIS_DATA_DIR = ROOT / "data" / "jurisprudencia_csjn"
@@ -47,8 +55,9 @@ CASE_FRAGMENTS_PATH = JURIS_OUTPUT_DIR / "case_fragments.parquet"
 CASE_EMBEDDINGS_NPY_PATH = JURIS_OUTPUT_DIR / "case_embeddings.npy"
 LAW_CASE_LINKS_PATH = JURIS_OUTPUT_DIR / "law_case_links.parquet"
 
-# Fase 5 — vinculos entre normas.
-NORM_LINKS_PATH = OUTPUT_DIR / "norm_links.parquet"
+# Fase 5 — vinculos entre normas. Sigue a CLASSIFICATIONS_VERSION (dominant_label depende de
+# candidate_classifications).
+NORM_LINKS_PATH = OUTPUT_DIR / f"norm_links{_CLASSIFICATIONS_SUFFIX}.parquet"
 LINK_SUMMARIES_PATH = OUTPUT_DIR / "link_summaries.parquet"
 
 # Feedback de la app (👍/👎 por respuesta del chatbot).
