@@ -31,18 +31,35 @@ def _get(key: str, loader: Callable[[], object]):
     return _cache[key]
 
 
-def get_documents() -> pd.DataFrame:
-    """documents.csv completo, indexado por document_id (30k filas, liviano)."""
-    return _get(
-        "documents",
-        lambda: pd.read_csv(config.DOCUMENTS_PATH, dtype=str, keep_default_na=False).set_index(
-            "document_id", drop=False
-        ),
+def _load_documents() -> pd.DataFrame:
+    """documents.csv + numero_norma (join 1:1 con document_identifiers.csv), indexado por
+    document_id (30k filas, liviano). numero_norma no vive en documents.csv y es lo que permite
+    buscar por numero de ley y componer el titulo unificado (ver app/titles.py)."""
+    docs = pd.read_csv(config.DOCUMENTS_PATH, dtype=str, keep_default_na=False)
+    ids = pd.read_csv(
+        config.DOCUMENT_IDENTIFIERS_PATH,
+        dtype=str,
+        keep_default_na=False,
+        usecols=["document_id", "numero_norma"],
     )
+    docs = docs.merge(ids, on="document_id", how="left")
+    docs["numero_norma"] = docs["numero_norma"].fillna("")
+    return docs.set_index("document_id", drop=False)
+
+
+def get_documents() -> pd.DataFrame:
+    return _get("documents", _load_documents)
 
 
 def get_titles() -> pd.Series:
-    return _get("titles", lambda: get_documents()["titulo_resumido"])
+    """document_id -> titulo unificado ("Ley 24.240 — Defensa del Consumidor"). Un unico
+    componedor (app/titles.py) para que busqueda, ficha, vinculos, grafo y Hallazgos coincidan."""
+    from .titles import componer_titulo
+
+    return _get(
+        "titles",
+        lambda: get_documents().apply(componer_titulo, axis=1),
+    )
 
 
 def get_norm_links() -> pd.DataFrame:

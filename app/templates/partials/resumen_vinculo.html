@@ -9,16 +9,17 @@
     <p class="font-mono text-[10.5px] text-ink-soft">{{ "desde caché" if resumen.from_cache else "recién generado" }} · {{ resumen.modelo }}</p>
   </div>
   <p class="font-display text-[1.02rem] leading-snug mb-3">
-    {{ titulo_a[:70] }} <span class="text-tinta">↔</span> {{ titulo_b[:70] }}
-    <span class="font-mono text-[10.5px] text-ink-soft">({{ other_id }})</span>
+    {{ titulo_a[:70] }}{% if a_es_vista %} <span class="badge badge-tinta">esta norma</span>{% endif %}
+    <span class="text-tinta">↔</span>
+    {{ titulo_b[:70] }}{% if b_es_vista %} <span class="badge badge-tinta">esta norma</span>{% endif %}
   </p>
   <p class="text-sm leading-relaxed"><strong class="font-semibold">Relación:</strong> {{ resumen.relacion }}</p>
   <p class="text-sm leading-relaxed mt-2"><strong class="font-semibold">Relevancia jurídica:</strong> {{ resumen.relevancia }}</p>
   {% if resumen.evidencia_a %}
-  <blockquote class="mt-3 border-l-[3px] border-tinta/50 pl-3 font-display italic text-sm text-ink-soft">Norma A — “{{ resumen.evidencia_a }}”</blockquote>
+  <blockquote class="mt-3 border-l-[3px] border-tinta/50 pl-3 font-display italic text-sm text-ink-soft"><span class="not-italic font-mono text-[10.5px] uppercase tracking-[0.08em] text-tinta">{{ titulo_a[:48] }}</span><br>“{{ resumen.evidencia_a }}”</blockquote>
   {% endif %}
   {% if resumen.evidencia_b %}
-  <blockquote class="mt-2 border-l-[3px] border-tinta/50 pl-3 font-display italic text-sm text-ink-soft">Norma B — “{{ resumen.evidencia_b }}”</blockquote>
+  <blockquote class="mt-2 border-l-[3px] border-tinta/50 pl-3 font-display italic text-sm text-ink-soft"><span class="not-italic font-mono text-[10.5px] uppercase tracking-[0.08em] text-tinta">{{ titulo_b[:48] }}</span><br>“{{ resumen.evidencia_b }}”</blockquote>
   {% endif %}
 </div>
 {% endif %}

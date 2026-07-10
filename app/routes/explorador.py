@@ -2,6 +2,8 @@
 normas vinculadas con resumen IA on-demand y fallos CSJN relacionados."""
 from __future__ import annotations
 
+import re
+
 import pandas as pd
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
@@ -11,6 +13,8 @@ from lexar.textfix import fix_display_text
 
 from .. import state
 from ..templating import templates
+from ..titles import componer_titulo, formato_numero
+from ..vigencia import estado_vigencia
 
 router = APIRouter()
 
@@ -39,17 +43,28 @@ def _buscar(q: str) -> list[dict]:
     q = q.strip()
     if not q:
         return []
+    # Busqueda por numero de ley: la gente escribe "24.240" o "24240" (o confunde el numero con
+    # el id de InfoLeg). Normalizamos a digitos y matcheamos numero_norma exacto.
+    qdigits = re.sub(r"\D", "", q)
+    num_mask = (documents["numero_norma"] == qdigits) if qdigits else pd.Series(False, index=documents.index)
     mask = (
         documents["titulo_resumido"].str.contains(q, case=False, na=False, regex=False)
         | documents["titulo_sumario"].str.contains(q, case=False, na=False, regex=False)
         | documents["texto_resumido"].str.contains(q, case=False, na=False, regex=False)
         | (documents["document_id"] == q)
+        | num_mask
     )
-    matches = documents[mask].head(MAX_RESULTADOS)
+    matches = documents[mask]
+    if qdigits:  # el match exacto por numero va primero
+        matches = matches.assign(_rank=num_mask[mask].map({True: 0, False: 1})).sort_values(
+            "_rank", kind="stable"
+        )
+    matches = matches.head(MAX_RESULTADOS)
     return [
         {
             "document_id": row["document_id"],
-            "titulo": fix_display_text(row["titulo_resumido"]),
+            "titulo": componer_titulo(row),
+            "numero": formato_numero(row["numero_norma"]),
             "tipo": row["tipo_norma"],
             "fecha": row["fecha_sancion"] or "s/d",
         }
@@ -66,10 +81,11 @@ def _buscar_semantica(q: str, top_docs: int = 20) -> list[dict]:
     law = state.get_law_index()
     hits = law.search(embed_texts([q.strip()]), top_k=40)
     docs = aggregate_hits_by_document(hits, "document_id").head(top_docs)
+    titles = state.get_titles()  # la metadata FAISS no trae titulo_sumario/numero: resolver por id
     return [
         {
             "document_id": row["document_id"],
-            "titulo": fix_display_text(str(row["titulo_resumido"])),
+            "titulo": str(titles.get(row["document_id"], row["document_id"])),
             "tipo": row["tipo_norma"],
             "fecha": row["fecha_sancion"] or "s/d",
             "score": f"{row['score']:.3f}",
@@ -160,11 +176,13 @@ def norma(request: Request, document_id: str):
     return templates.TemplateResponse(request, "norma.html", {
         "doc": {
             "document_id": document_id,
-            "titulo": fix_display_text(doc["titulo_resumido"]),
+            "titulo": componer_titulo(doc),
+            "numero": formato_numero(doc["numero_norma"]),
             "tipo": doc["tipo_norma"],
             "sancion": doc["fecha_sancion"] or "s/d",
             "boletin": doc["fecha_boletin"] or "s/d",
             "resumen": fix_display_text(doc["texto_resumido"]) if doc.get("texto_resumido") else "",
+            "vigencia": estado_vigencia(doc.get("observaciones", "")),
         },
         "n_mods": count_later_modifications(norm_links, document_id),
         "texto_completo": fix_display_text(full_text[:MAX_TEXTO_CHARS]) if full_text else None,
@@ -176,27 +194,58 @@ def norma(request: Request, document_id: str):
 
 
 GRAFO_MAX_VECINOS = 20
-# Colores de arista por etiqueta dominante (tokens de base.html). El resto de etiquetas
-# (neutral, different_scope, needs_review) cae al gris de linea.
+GRAFO_MUY_MODIFICADA = 5  # >= modificaciones posteriores -> anillo ambar ("vigente pero revisá")
+# Colores de arista por etiqueta dominante (tokens de base.html). "possible_conflict" se dejo de
+# colorear a proposito (cae al gris neutro): tras la re-verificacion quedaron 4 conflictos reales,
+# como categoria del grafo era ruido alarmista. El resto (neutral, different_scope) tambien va gris.
 GRAFO_EDGE_COLORS = {
-    "possible_conflict": "#A93D32",
     "possible_modification": "#4A3C8C",
     "possible_overlap": "#A99BE3",
 }
 
 
+def _sim_norm(sim) -> float:
+    """Similitud (~0.95–1.0) -> [0,1] para escalar ancho de arista y tamano de nodo."""
+    return max(0.0, min(1.0, (float(sim) - 0.95) / 0.05)) if pd.notna(sim) else 0.0
+
+
 def _grafo_edge(desde: str, hasta: str, source: str, label: str, sim: float) -> dict:
-    width = 1.2
-    if pd.notna(sim):
-        width = 1 + max(0.0, min(1.0, (float(sim) - 0.95) / 0.05)) * 3
     etiqueta = DOMINANT_LABEL.get(label, (label or "—", ""))[0]
     return {
         "from": desde,
         "to": hasta,
         "dashes": source == "semantic",
         "color": {"color": GRAFO_EDGE_COLORS.get(label, "#C9C4B8"), "opacity": 0.85},
-        "width": round(width, 2),
+        "width": round(1 + _sim_norm(sim) * 3, 2),
         "title": f"{etiqueta} · {LINK_SOURCE_LABEL.get(source, source)}",
+    }
+
+
+def _grafo_nodo(doc_id, titulo_full, documents, norm_links, *, central: bool, sim=None) -> dict:
+    """Estilo del nodo: rojo si la norma esta derogada, anillo ambar si esta vigente pero muy
+    modificada, y — para las vecinas — tamano escalado por similitud a la norma central."""
+    obs = documents.loc[doc_id, "observaciones"] if doc_id in documents.index else ""
+    estado = estado_vigencia(obs)["estado"]
+    n_mods = count_later_modifications(norm_links, doc_id)
+
+    if estado:  # derogada / parcialmente derogada
+        color = {"background": "#A93D32", "border": "#7E2C24"}
+    elif central:
+        color = {"background": "#4A3C8C", "border": "#372D6E"}
+    else:
+        color = {"background": "#EDEAF7", "border": "#A99BE3"}
+    if not estado and n_mods >= GRAFO_MUY_MODIFICADA:
+        color["border"] = "#C68A2E"  # anillo ambar
+
+    label = titulo_full[:32] + ("…" if len(titulo_full) > 32 else "")
+    nota = f" · DEROGADA" if estado else (f" · {n_mods} modif." if n_mods else "")
+    return {
+        "id": doc_id,
+        "label": label,
+        "size": 26 if central else round(12 + _sim_norm(sim) * 12, 1),
+        "borderWidth": 3 if (estado or n_mods >= GRAFO_MUY_MODIFICADA) else 1.5,
+        "color": color,
+        "title": f"{titulo_full} ({doc_id}){nota}",
     }
 
 
@@ -205,28 +254,22 @@ def grafo_json(document_id: str):
     """Datos para vis-network: la norma central, sus top vecinos y — clave para que se vea un
     cluster real y no una estrella — los vinculos entre los propios vecinos."""
     norm_links = state.get_norm_links()
+    documents = state.get_documents()
     links = links_for_document(norm_links, document_id)
     vecinos = links.sort_values("max_similarity", ascending=False, na_position="last").head(GRAFO_MAX_VECINOS)
     titles = state.get_titles()
     node_ids = {document_id, *vecinos["other_document_id"]}
 
-    def _label(doc_id: str) -> str:
-        titulo = fix_display_text(str(titles.get(doc_id, doc_id)))
-        return titulo[:32] + ("…" if len(titulo) > 32 else "")
+    def _titulo(doc_id: str) -> str:
+        return fix_display_text(str(titles.get(doc_id, doc_id)))
 
-    nodes = [{
-        "id": document_id, "label": _label(document_id), "size": 26,
-        "color": {"background": "#4A3C8C", "border": "#372D6E"},
-        "title": f"{fix_display_text(str(titles.get(document_id, document_id)))} ({document_id})",
-    }]
+    nodes = [_grafo_nodo(document_id, _titulo(document_id), documents, norm_links, central=True)]
     edges = []
     for _, r in vecinos.iterrows():
         other = r["other_document_id"]
-        nodes.append({
-            "id": other, "label": _label(other), "size": 14,
-            "color": {"background": "#EDEAF7", "border": "#A99BE3"},
-            "title": f"{fix_display_text(str(titles.get(other, other)))} ({other})",
-        })
+        nodes.append(_grafo_nodo(
+            other, _titulo(other), documents, norm_links, central=False, sim=r.get("max_similarity")
+        ))
         edges.append(_grafo_edge(document_id, other, r["link_source"], r.get("dominant_label"), r.get("max_similarity")))
 
     entre_vecinos = norm_links[
@@ -249,22 +292,24 @@ def resumen(request: Request, document_id: str, other_document_id: str = Form(..
     """Resumen IA de un vinculo (partial HTMX). Cache-first via LinkSummarizer — el costo LLM
     se paga una sola vez por par de normas."""
     titles = state.get_titles()
-    contexto = {
-        "titulo_a": fix_display_text(str(titles.get(document_id, document_id))),
-        "titulo_b": fix_display_text(str(titles.get(other_document_id, other_document_id))),
-        "other_id": other_document_id,
-    }
     links = links_for_document(state.get_norm_links(), document_id)
     match = links[links["other_document_id"] == other_document_id]
     link_row = match.iloc[0] if not match.empty else None
     try:
         summary = state.get_summarizer().summarize(document_id, other_document_id, link_row)
     except Exception as exc:
-        return templates.TemplateResponse(
-            request, "partials/resumen_vinculo.html", {**contexto, "error": str(exc)}
-        )
+        return templates.TemplateResponse(request, "partials/resumen_vinculo.html", {
+            "titulo_b": fix_display_text(str(titles.get(other_document_id, other_document_id))),
+            "error": str(exc),
+        })
+    # A/B se resuelven contra los ids REALES que uso el summary (orden alfabetico, no vista/otra),
+    # asi cada evidencia queda bajo el titulo correcto; se marca cual es la norma que se esta viendo.
+    doc_a, doc_b = summary["doc_a"], summary["doc_b"]
     return templates.TemplateResponse(request, "partials/resumen_vinculo.html", {
-        **contexto,
+        "titulo_a": fix_display_text(str(titles.get(doc_a, doc_a))),
+        "titulo_b": fix_display_text(str(titles.get(doc_b, doc_b))),
+        "a_es_vista": doc_a == document_id,
+        "b_es_vista": doc_b == document_id,
         "resumen": {
             "relacion": summary["relacion"],
             "relevancia": summary["relevancia_juridica"],

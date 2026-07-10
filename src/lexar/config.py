@@ -31,6 +31,7 @@ ROOT = _find_root()
 DATASET_DIR = ROOT / "data" / "lexar_datos_infoleg_saij"
 TEXT_VERSIONS_PATH = DATASET_DIR / "corpus_unificado" / "text_versions.parquet"
 DOCUMENTS_PATH = DATASET_DIR / "infoleg" / "procesado" / "documents.csv"
+DOCUMENT_IDENTIFIERS_PATH = DATASET_DIR / "infoleg" / "procesado" / "document_identifiers.csv"
 RELATIONS_PATH = DATASET_DIR / "infoleg" / "procesado" / "relations.csv"
 
 OUTPUT_DIR = ROOT / "outputs"
@@ -75,8 +76,14 @@ GCP_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "lexar-501717")
 GCP_LOCATION = "us-central1"
 EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIM = 768  # truncado via Matryoshka Representation Learning (maximo nativo: 3072)
-SUMMARY_MODEL = "gemini-2.5-flash-lite"
-CHAT_MODEL = "gemini-2.5-flash"
+# Modelos por tarea (subidos para la demo, con creditos disponibles):
+#   - reescritura de la consulta coloquial->juridica: tarea simple, flash (rapido).
+#   - respuesta final del chatbot y resumenes "Explicar IA": pro (mejor razonamiento juridico).
+#   - embeddings: gemini-embedding-001 (re-embeber el corpus no es viable).
+REWRITE_MODEL = "gemini-2.5-flash"
+ANSWER_MODEL = "gemini-2.5-pro"
+SUMMARY_MODEL = "gemini-2.5-pro"
+CHAT_MODEL = REWRITE_MODEL  # alias retrocompatible (algun notebook viejo lo importa)
 
 # Segmentacion (mismos valores que la Fase 1).
 MIN_FRAGMENT_CHARS = 80

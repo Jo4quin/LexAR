@@ -132,6 +132,7 @@ textual breve de la Norma A, o cadena vacia si no hay fragmentos), evidencia_b (
         hit = cache[(cache["doc_pair_key"] == key) & (cache["prompt_version"] == SUMMARY_PROMPT_VERSION)]
         if not hit.empty:
             row = hit.iloc[-1].to_dict()
+            row["doc_a"], row["doc_b"] = doc_a, doc_b
             row["from_cache"] = True
             return row
 
@@ -149,5 +150,6 @@ textual breve de la Norma A, o cadena vacia si no hay fragmentos), evidencia_b (
         updated = pd.concat([cache, pd.DataFrame([row])], ignore_index=True)
         LINK_SUMMARIES_PATH.parent.mkdir(parents=True, exist_ok=True)
         updated.to_parquet(LINK_SUMMARIES_PATH, index=False)
+        row["doc_a"], row["doc_b"] = doc_a, doc_b
         row["from_cache"] = False
         return row
