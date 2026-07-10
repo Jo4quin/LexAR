@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="max-w-3xl">
+  <p class="font-mono text-[11px] tracking-[0.18em] uppercase text-tinta mb-3">Asistente de investigación jurídica · Legislación nacional argentina</p>
+  <h1 class="font-display text-4xl leading-[1.15] mb-4">El corpus legal argentino,<br><em>vinculado y explicado</em>.</h1>
+  <p class="text-[1.02rem] leading-relaxed text-ink-soft">
+    Leyes y decreto-leyes nacionales (Infoleg + SAIJ) y fallos de la Corte Suprema publicados en
+    SAIJ desde 2020, conectados por similitud semántica, clasificados por IA y citables con
+    verificación textual automática.
+  </p>
+</section>
+
+<section class="grid md:grid-cols-2 gap-4 mt-9">
+  <a href="/explorador" class="group bg-surface border border-line rounded-sm p-6 hover:border-tinta transition-colors">
+    <p class="font-mono text-[10.5px] tracking-[0.16em] uppercase text-tinta mb-2">Explorador</p>
+    <h2 class="font-display text-xl mb-2">Cada norma con sus vínculos</h2>
+    <p class="text-sm text-ink-soft leading-relaxed">
+      Buscá una ley y mirá sus modificaciones oficiales, sus superposiciones semánticas con
+      resumen explicativo generado por IA, y los fallos CSJN que le quedan cerca.
+    </p>
+    <p class="font-mono text-[11px] tracking-[0.14em] uppercase text-tinta mt-4 group-hover:translate-x-1 transition-transform">Abrir →</p>
+  </a>
+  <a href="/chatbot" class="group bg-surface border border-line rounded-sm p-6 hover:border-tinta transition-colors">
+    <p class="font-mono text-[10.5px] tracking-[0.16em] uppercase text-tinta mb-2">Chatbot</p>
+    <h2 class="font-display text-xl mb-2">Un caso, su marco legal</h2>
+    <p class="text-sm text-ink-soft leading-relaxed">
+      Planteá un caso en lenguaje natural («me chocaron el auto») y recibí las leyes aplicables
+      y fallos relevantes, con citas textuales verificadas contra la fuente.
+    </p>
+    <p class="font-mono text-[11px] tracking-[0.14em] uppercase text-tinta mt-4 group-hover:translate-x-1 transition-transform">Abrir →</p>
+  </a>
+</section>
+
+<div class="mt-8 border-l-[3px] border-tinta bg-tinta-wash/60 px-4 py-3 text-sm">
+  <span class="font-display">§</span> Esta herramienta asiste la investigación jurídica sobre un
+  corpus acotado. No constituye asesoramiento legal.
+</div>
+
+<section class="mt-11">
+  <h2 class="font-display text-xl mb-1">Estado de los datos</h2>
+  <p class="text-sm text-ink-soft mb-4">Artefactos generados por el pipeline (Fases 2–5). Si algo figura «falta», correr el notebook de esa fase.</p>
+  <div class="bg-surface border border-line rounded-sm overflow-x-auto">
+    <table class="tabla">
+      <thead>
+        <tr><th>Fase</th><th>Artefacto</th><th class="text-right">Filas</th><th class="text-right pr-5!">Estado</th></tr>
+      </thead>
+      <tbody>
+        {% for a in artifacts %}
+        <tr>
+          <td class="font-mono text-xs text-ink-soft whitespace-nowrap">{{ a.fase }}</td>
+          <td>{{ a.label }}</td>
+          <td class="font-mono text-xs text-right">{% if a.rows is not none %}{{ a.rows|miles }}{% else %}—{% endif %}</td>
+          <td class="text-right pr-5!">
+            {% if a.exists %}<span class="sello sello-verde">Listo</span>{% else %}<span class="sello sello-off">Falta</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if missing_npy %}
+  <div class="mt-4 border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm">
+    Faltan matrices de embeddings: <span class="font-mono text-xs">{{ missing_npy|join(", ") }}</span> — el chatbot no puede buscar hasta generarlas.
+  </div>
+  {% else %}
+  <p class="mt-4 text-sm text-verde"><span class="font-mono">✓</span> Embeddings de leyes y de fallos disponibles — el chatbot puede buscar en ambos corpus.</p>
+  {% endif %}
+
+  <p class="text-xs text-ink-soft leading-relaxed mt-6 max-w-3xl">
+    Cobertura: 8.887 de 30.061 normas con texto completo (29,6 %); fallos limitados a la selección
+    que SAIJ publica de la CSJN (~100–250 por año). Corpus solo nacional: sin decretos comunes,
+    resoluciones ni normativa provincial.
+  </p>
+</section>
+
+{% endblock %}

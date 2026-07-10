@@ -8,4 +8,8 @@ scikit-learn
 jupyter
 pypdf
 ftfy
-streamlit
+fastapi
+uvicorn
+jinja2
+python-multipart
+markdown

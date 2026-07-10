@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Chatbot — LexAR{% endblock %}
+{% block content %}
+
+<div class="flex flex-wrap items-end justify-between gap-4 mb-3">
+  <div>
+    <p class="font-mono text-[11px] tracking-[0.18em] uppercase text-tinta mb-2">Chatbot RAG · citas verificadas</p>
+    <h1 class="font-display text-3xl">Consultá un caso</h1>
+  </div>
+  <a href="/chatbot" class="font-mono text-[11px] uppercase tracking-[0.12em] text-tinta border border-tinta/40 rounded-sm px-3 py-1.5 hover:bg-tinta hover:text-white transition-colors">
+    Nueva conversación
+  </a>
+</div>
+
+<div class="border-l-[3px] border-tinta bg-tinta-wash/60 px-4 py-3 text-sm mb-4">
+  <span class="font-display">§</span> {{ disclaimer }}
+</div>
+
+{% if sin_fallos %}
+<div class="border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm mb-4">
+  Índice de fallos no disponible (correr la Fase 4) — el chatbot responderá solo con leyes.
+</div>
+{% endif %}
+
+<div id="chat" class="space-y-4">
+  <div class="bg-surface border border-line rounded-sm px-5 py-4 text-sm text-ink-soft leading-relaxed max-w-2xl">
+    Planteá un caso en lenguaje natural — por ejemplo, <em>«me chocaron el auto y el otro
+    conductor no tiene seguro»</em> — y te devuelvo el marco legal aplicable con citas
+    textuales verificadas y fallos recientes de la CSJN.
+  </div>
+</div>
+
+<div id="pensando" class="htmx-indicator items-center gap-3 mt-4 text-sm text-ink-soft">
+  <span class="puntos"><span></span><span></span><span></span></span>
+  Reescribiendo la consulta, buscando normativa y fallos… la primera consulta además carga los índices (tarda un poco más).
+</div>
+
+<form id="chat-form" hx-post="/chatbot/mensaje" hx-target="#chat" hx-swap="beforeend show:bottom"
+      hx-indicator="#pensando" hx-disabled-elt="find input, find button"
+      class="mt-6 flex gap-2 sticky bottom-4">
+  <input name="caso" required autocomplete="off" placeholder="Escribí tu caso…" aria-label="Caso a consultar"
+         class="flex-1 bg-surface border border-line rounded-sm px-4 py-3 text-[0.95rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none shadow-sm">
+  <button type="submit"
+          class="bg-tinta text-white font-mono text-[11px] tracking-[0.14em] uppercase px-5 rounded-sm hover:bg-tinta-deep transition-colors disabled:opacity-50 cursor-pointer">
+    Consultar
+  </button>
+</form>
+
+<script>
+  const form = document.getElementById("chat-form");
+  const chat = document.getElementById("chat");
+  // La burbuja del usuario se agrega al mandar (no al responder): la respuesta tarda ~10-30 s
+  // y el mensaje propio tiene que verse de inmediato.
+  form.addEventListener("htmx:configRequest", () => {
+    const caso = form.elements.caso.value.trim();
+    if (!caso) return;
+    const bubble = document.createElement("div");
+    bubble.className = "ml-auto w-fit max-w-[75%] bg-tinta text-white rounded-sm px-4 py-2.5 text-sm leading-relaxed";
+    bubble.textContent = caso;
+    chat.appendChild(bubble);
+    bubble.scrollIntoView({ behavior: "smooth", block: "end" });
+  });
+  form.addEventListener("htmx:afterRequest", () => {
+    form.reset();
+    form.elements.caso.focus();
+  });
+</script>
+
+{% endblock %}

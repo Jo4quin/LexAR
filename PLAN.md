@@ -16,7 +16,7 @@ Todas las fases del pivot se implementaron y verificaron contra datos reales en 
 | 4 — Jurisprudencia CSJN | 1.234 fallos (2020-2026), 8.702 fragmentos, 8.702/8.702 embeddings, 28.930 vínculos ley↔fallo |
 | 5 — Vínculos + resúmenes | 48.276 `norm_links` (38.552 semánticos, 8.297 oficiales, 1.427 ambos); resúmenes on-demand verificados con caché |
 | 6 — Chatbot RAG | Verificado end-to-end con ambos índices; 8/10 citas válidas en el ejemplo de referencia |
-| 7 — App Streamlit | Las 3 páginas arrancan sin errores (`streamlit run app/Home.py`, HTTP 200) |
+| 7 — App web | Streamlit original verificada por arranque; reconstruida el 2026-07-10 en FastAPI + HTMX + Tailwind, con click-through completo en navegador |
 | 8 — Evaluación | Recall@10 73,5 % (con query rewriting) vs. 70,6 % (sin); trazabilidad de citas 93,7 % sobre 143 citas |
 
 Un hallazgo no anticipado en el plan original: un bug real de colisión de índices de checkpoint
@@ -40,7 +40,9 @@ un notebook pipeline con constantes `MAX_*` para smoke tests, checkpointing rean
 
 **Decisiones ya tomadas:**
 
-- Interfaz: **app Streamlit** (explorador + chatbot).
+- Interfaz: **app Streamlit** (explorador + chatbot). *(Actualización 2026-07-10: la interfaz se
+  reconstruyó en FastAPI + HTMX + Tailwind porque el look de Streamlit resultaba genérico — ver la
+  sección Fase 7 de `CLAUDE.md`; el diseño funcional de abajo sigue vigente.)*
 - Resúmenes IA de vínculos: **on-demand + caché parquet** (no batch masivo); se precalientan los
   ejemplos de la demo.
 - Alcance jurisprudencia: **solo Fallos CSJN 2020→hoy** vía SAIJ.
@@ -195,7 +197,13 @@ arriba. Los notebooks viejos quedan intactos; código nuevo importa de `src`.
 auto, despido, alquiler, defensa del consumidor, etc.) con las leyes esperadas anotadas a mano por el
 equipo (columnas `caso`, `leyes_esperadas`, `notas`). Es el ground truth de la evaluación de Fase 8.
 
-## Fase 7 — App Streamlit (`app/`) — completa
+## Fase 7 — App Streamlit (`app/`) — completa (luego reconstruida)
+
+> **Actualización 2026-07-10**: esta fase se implementó y verificó tal como se describe abajo, pero
+> la interfaz se reconstruyó después en **FastAPI + Jinja2 + HTMX + Tailwind** (mismo alcance
+> funcional, `src/lexar/` intacto) porque el look de Streamlit resultaba genérico. Correr con
+> `python -m uvicorn app.main:app`. Detalle de la arquitectura nueva en la sección Fase 7 de
+> `CLAUDE.md`. Lo que sigue documenta la versión Streamlit original.
 
 **Resultado real:** las 3 páginas (`Home`, `Explorador`, `Chatbot`) arrancan sin errores —
 `streamlit run app/Home.py` responde HTTP 200 en las tres rutas, sin traceback en el log del

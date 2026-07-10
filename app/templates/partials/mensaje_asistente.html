@@ -1,0 +1,73 @@
+{% if error %}
+<div class="border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm">
+  No se pudo consultar el modelo: {{ error }} — probá de nuevo en unos segundos.
+</div>
+{% else %}
+<div class="bg-surface border border-line rounded-sm px-5 py-4">
+  <p class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-ink-soft mb-3">
+    Consultas derivadas: {{ consultas|join(" · ") }} — materia: {{ materia }}
+  </p>
+
+  <div class="prosa">{{ respuesta_markdown|md }}</div>
+
+  <details class="mt-4 border-t border-line">
+    <summary>Citas textuales — {{ citas_validas }}/{{ citas|length }} verificadas contra la fuente</summary>
+    <ul class="space-y-3 pb-3">
+      {% for c in citas %}
+      <li class="flex items-start gap-3">
+        <span class="sello {{ 'sello-verde' if c.cita_valida else 'sello-off' }} mt-1 shrink-0">{{ "Verificada" if c.cita_valida else "No verificada" }}</span>
+        <div>
+          <span class="font-mono text-[11px] text-tinta">[{{ c.fuente_id }}]</span>
+          <span class="font-display italic text-sm text-ink-soft">“{{ c.cita_textual|fix }}”</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+
+  <details class="border-t border-line">
+    <summary>Leyes recuperadas ({{ leyes|length }})</summary>
+    <div class="overflow-x-auto pb-3">
+      <table class="tabla">
+        <thead><tr><th>Id</th><th>Título</th><th>Tipo</th><th>Sanción</th><th class="text-right">Score</th></tr></thead>
+        <tbody>
+          {% for l in leyes %}
+          <tr>
+            <td class="font-mono text-xs whitespace-nowrap"><a href="/explorador/norma/{{ l.document_id }}" class="text-tinta hover:underline">{{ l.document_id }}</a></td>
+            <td>{{ l.titulo_resumido|fix }}</td>
+            <td class="text-xs">{{ l.tipo_norma }}</td>
+            <td class="font-mono text-xs">{{ l.fecha_sancion }}</td>
+            <td class="font-mono text-xs text-right">{{ "%.3f"|format(l.score) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  {% if fallos %}
+  <details class="border-t border-line">
+    <summary>Fallos CSJN recuperados ({{ fallos|length }})</summary>
+    <div class="overflow-x-auto pb-3">
+      <table class="tabla">
+        <thead><tr><th>Id</th><th>Fecha</th><th>Actor</th><th>Demandado</th><th>Sobre</th><th class="text-right">Score</th></tr></thead>
+        <tbody>
+          {% for f in fallos %}
+          <tr>
+            <td class="font-mono text-xs whitespace-nowrap">{{ f.case_id }}</td>
+            <td class="font-mono text-xs whitespace-nowrap">{{ f.fecha }}</td>
+            <td>{{ f.actor|fix }}</td>
+            <td>{{ f.demandado|fix }}</td>
+            <td>{{ f.sobre|fix }}</td>
+            <td class="font-mono text-xs text-right">{{ "%.3f"|format(f.score) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+
+  <p class="text-[11px] text-ink-soft mt-3 pt-3 border-t border-line">{{ disclaimer }}</p>
+</div>
+{% endif %}
