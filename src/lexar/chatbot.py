@@ -8,6 +8,9 @@ validadas automaticamente contra el texto fuente.
 """
 from __future__ import annotations
 
+import re
+from typing import Callable
+
 from google.genai import types
 
 from .config import CHAT_MODEL
@@ -52,45 +55,114 @@ ANSWER_SCHEMA = types.Schema(
 )
 
 
-def rewrite_query(case_text: str, limiter: AdaptiveRateLimiter | None = None) -> dict:
+# Ids de fuente citables ([frag:00012345] leyes, [cfrag:00001234] fallos). El LLM a veces mete
+# varios en un mismo corchete ("[cfrag:X, cfrag:Y]") — se parsean todas las ocurrencias en vez
+# de tratar el corchete como un unico id (bug conocido que penalizaba la trazabilidad).
+CITATION_ID_PATTERN = re.compile(r"c?frag:\d+")
+
+MAX_HISTORY_TURNS = 4
+MAX_HISTORY_CHARS = 1_500
+
+
+def _history_section(history: list[dict] | None) -> str:
+    """Bloque 'Conversacion previa' para los prompts. history = [{'role','content'}, ...]."""
+    if not history:
+        return ""
+    lines = []
+    for turn in history[-MAX_HISTORY_TURNS:]:
+        content = str(turn.get("content", "")).strip()
+        if not content:
+            continue
+        role = "Abogado" if turn.get("role") == "user" else "Asistente"
+        lines.append(f"{role}: {content[:MAX_HISTORY_CHARS]}")
+    if not lines:
+        return ""
+    return "\nConversacion previa (contexto de esta consulta):\n" + "\n".join(lines) + "\n"
+
+
+def rewrite_query(
+    case_text: str,
+    limiter: AdaptiveRateLimiter | None = None,
+    history: list[dict] | None = None,
+) -> dict:
+    history_block = _history_section(history)
+    followup_note = (
+        "\nSi el caso es una repregunta o ampliacion sobre la conversacion previa, reescribilo\n"
+        "incorporando ese contexto (la consulta reescrita debe entenderse sola)."
+        if history_block
+        else ""
+    )
     prompt = f"""Un abogado describe un caso en lenguaje coloquial. Reescribilo como 1 a 3 consultas
 breves en lenguaje juridico formal argentino, aptas para buscar normativa aplicable por
 similitud semantica (ej.: "me chocaron el auto" → "responsabilidad civil por accidente de
 transito", "obligacion de resarcir danos causados por vehiculos"). Indica tambien la materia
-juridica principal.
-
+juridica principal.{followup_note}
+{history_block}
 Caso: {case_text}
 
 Devolve un unico JSON con: consultas (lista de 1 a 3 strings), materia (string breve)."""
     return generate_json(CHAT_MODEL, prompt, REWRITE_SCHEMA, limiter)
 
 
-def _law_context(hits, top_docs: int) -> tuple[str, dict[str, str]]:
+def _law_context(hits, top_docs: int) -> tuple[str, dict[str, str], dict[str, dict]]:
     docs = aggregate_hits_by_document(hits, "document_id").head(top_docs)
-    section, sources = "", {}
+    section, sources, fuentes = "", {}, {}
     for _, row in docs.iterrows():
         source_id = row["fragment_id"]
         sources[source_id] = row["text"]
+        fuentes[source_id] = {
+            "tipo": "ley",
+            "document_id": row["document_id"],
+            "titulo": str(row["titulo_resumido"]),
+        }
         section += (
             f"\n[{source_id}] {row['titulo_resumido']} ({row['tipo_norma']}, {row['fecha_sancion']}, "
             f"{row['label']}, id {row['document_id']}):\n{str(row['text'])[:1500]}\n"
         )
-    return section, sources
+    return section, sources, fuentes
 
 
-def _case_context(hits, top_cases: int) -> tuple[str, dict[str, str]]:
+def _case_context(hits, top_cases: int) -> tuple[str, dict[str, str], dict[str, dict]]:
     if hits is None or hits.empty:
-        return "", {}
+        return "", {}, {}
     cases = aggregate_hits_by_document(hits, "case_id").head(top_cases)
-    section, sources = "", {}
+    section, sources, fuentes = "", {}, {}
     for _, row in cases.iterrows():
         source_id = row["fragment_id"]
         sources[source_id] = row["text"]
+        fuentes[source_id] = {
+            "tipo": "fallo",
+            "case_id": row["case_id"],
+            "url": str(row["url"]) if row.get("url") else "",
+            "titulo": f"{row['actor']} c/ {row['demandado']} s/ {row['sobre']}",
+        }
         section += (
             f"\n[{source_id}] Fallo CSJN {row['fecha']}: {row['actor']} c/ {row['demandado']} "
             f"s/ {row['sobre']} (id {row['case_id']}):\n{str(row['text'])[:1500]}\n"
         )
-    return section, sources
+    return section, sources, fuentes
+
+
+def validate_citations(citas: list[dict], sources: dict[str, str]) -> list[dict]:
+    """Valida cada cita contra sus fuentes. Un corchete puede traer varios ids — la cita es
+    valida si la quote normalizada aparece en alguna de las fuentes listadas."""
+    citations = []
+    for citation in citas:
+        raw_id = str(citation.get("fuente_id", ""))
+        ids = CITATION_ID_PATTERN.findall(raw_id) or [raw_id.strip().strip("[]")]
+        quote = citation.get("cita_textual", "")
+        quote_norm = normalize_text(quote)
+        valid = bool(quote_norm) and any(
+            source_id in sources and quote_norm in normalize_text(sources[source_id])
+            for source_id in ids
+        )
+        citations.append({
+            "fuente_id": ", ".join(ids),
+            "fuente_ids": ids,
+            "cita_textual": quote,
+            "cita_valida": valid,
+        })
+    return citations
 
 
 def answer_case(
@@ -101,20 +173,28 @@ def answer_case(
     top_docs: int = 6,
     top_cases: int = 4,
     limiter: AdaptiveRateLimiter | None = None,
+    history: list[dict] | None = None,
+    on_stage: Callable[[str], None] | None = None,
 ) -> dict:
     limiter = limiter or AdaptiveRateLimiter()
+    notify = on_stage or (lambda stage: None)
 
-    rewrite = rewrite_query(case_text, limiter)
+    notify("reescribiendo")
+    rewrite = rewrite_query(case_text, limiter, history)
     consultas = [q for q in rewrite.get("consultas", []) if q.strip()] or [case_text]
 
+    notify("buscando")
     query_vectors = embed_texts(consultas, limiter)
     law_hits = law_index.search(query_vectors, top_k=top_k_fragments)
     case_hits = case_index.search(query_vectors, top_k=top_k_fragments) if case_index is not None else None
 
-    law_section, law_sources = _law_context(law_hits, top_docs)
-    case_section, case_sources = _case_context(case_hits, top_cases)
+    law_section, law_sources, law_fuentes = _law_context(law_hits, top_docs)
+    case_section, case_sources, case_fuentes = _case_context(case_hits, top_cases)
     sources = {**law_sources, **case_sources}
+    fuentes = {**law_fuentes, **case_fuentes}
 
+    notify("redactando")
+    history_block = _history_section(history)
     fallos_block = f"\nFallos CSJN recuperados (desde 2020):\n{case_section}" if case_section else ""
     prompt = f"""Sos un asistente de investigacion juridica para abogados argentinos. Un abogado plantea
 un caso; en base UNICAMENTE a los fragmentos normativos y fallos recuperados abajo, indica el
@@ -124,7 +204,7 @@ Reglas estrictas:
   (ej. [frag:00012345]) y las citas textuales deben ser copias literales del texto provisto.
 - Si los fragmentos recuperados no cubren el caso, decilo explicitamente en vez de inventar.
 - Responde en espanol, en markdown, ordenado por relevancia.
-
+{history_block}
 Caso planteado: {case_text}
 Consultas juridicas derivadas: {"; ".join(consultas)} (materia: {rewrite.get("materia", "")})
 
@@ -137,23 +217,13 @@ del fragmento que sostiene cada afirmacion central)."""
 
     result = generate_json(CHAT_MODEL, prompt, ANSWER_SCHEMA, limiter)
 
-    citations = []
-    for citation in result.get("citas", []):
-        source_id = citation.get("fuente_id", "").strip().strip("[]")
-        quote = citation.get("cita_textual", "")
-        source_text = sources.get(source_id, "")
-        citations.append({
-            "fuente_id": source_id,
-            "cita_textual": quote,
-            "cita_valida": bool(source_text) and normalize_text(quote) in normalize_text(source_text),
-        })
-
     return {
         "caso": case_text,
         "consultas": consultas,
         "materia": rewrite.get("materia", ""),
         "respuesta_markdown": result["respuesta_markdown"],
-        "citas": citations,
+        "citas": validate_citations(result.get("citas", []), sources),
+        "fuentes": fuentes,
         "disclaimer": DISCLAIMER,
         "leyes": aggregate_hits_by_document(law_hits, "document_id").head(top_docs),
         "fallos": (

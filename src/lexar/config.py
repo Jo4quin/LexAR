@@ -51,6 +51,9 @@ LAW_CASE_LINKS_PATH = JURIS_OUTPUT_DIR / "law_case_links.parquet"
 NORM_LINKS_PATH = OUTPUT_DIR / "norm_links.parquet"
 LINK_SUMMARIES_PATH = OUTPUT_DIR / "link_summaries.parquet"
 
+# Feedback de la app (👍/👎 por respuesta del chatbot).
+FEEDBACK_PATH = OUTPUT_DIR / "feedback_chatbot.parquet"
+
 # Fase 6/8 — chatbot y evaluacion.
 # REPO_DIR es la raiz del checkout que contiene este codigo (worktree incluido) — para archivos
 # versionados en git, a diferencia de ROOT que apunta a donde viven data/ y outputs/ compartidos.
