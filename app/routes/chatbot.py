@@ -21,14 +21,16 @@ from markupsafe import Markup, escape
 
 from lexar import config
 from lexar.chatbot import DISCLAIMER, answer_case
+from lexar.links import count_later_modifications
 
 from .. import state
 from ..templating import _md, templates
+from ..vigencia import estado_vigencia
 
 router = APIRouter()
 
 LEY_COLS = ["document_id", "titulo_resumido", "tipo_norma", "fecha_sancion", "score"]
-FALLO_COLS = ["case_id", "fecha", "actor", "demandado", "sobre", "score"]
+FALLO_COLS = ["case_id", "fecha", "actor", "demandado", "sobre", "score", "url"]
 
 JOB_TTL_SECONDS = 900
 _jobs: dict[str, dict] = {}
@@ -74,6 +76,44 @@ def _linkify(html: str, fuentes: dict) -> Markup:
     return Markup(CITATION_RE.sub(_reemplazo, html))
 
 
+def _vigencia_de(document_id: str) -> dict:
+    """Estado de vigencia + cantidad de modificaciones posteriores de una norma, para el prompt del
+    chatbot (marca leyes derogadas y texto potencialmente desactualizado)."""
+    documents = state.get_documents()
+    obs = documents.loc[document_id, "observaciones"] if document_id in documents.index else ""
+    info = estado_vigencia(obs)
+    info["n_mods"] = count_later_modifications(state.get_norm_links(), document_id)
+    return info
+
+
+def _vigencia_fn():
+    """Callable document_id -> {estado, detalle, n_mods} que answer_case usa para anotar la
+    vigencia de cada ley recuperada. Se cachea por consulta para no re-filtrar norm_links."""
+    cache: dict[str, dict] = {}
+
+    def fn(document_id: str) -> dict:
+        if document_id not in cache:
+            cache[document_id] = _vigencia_de(document_id)
+        return cache[document_id]
+
+    return fn
+
+
+def _leyes_para_template(leyes) -> list[dict]:
+    """Filas de "leyes recuperadas". La metadata FAISS solo trae titulo_resumido; resolvemos el
+    titulo unificado por document_id (mismo componedor que el Explorador) y el estado de vigencia."""
+    if leyes is None:
+        return []
+    titles = state.get_titles()
+    registros = leyes[LEY_COLS].to_dict("records")
+    for r in registros:
+        r["titulo"] = str(titles.get(r["document_id"], r["document_id"]))
+        vig = _vigencia_de(r["document_id"])
+        r["estado"] = vig["estado"]
+        r["detalle"] = vig["detalle"]
+    return registros
+
+
 def _contexto_respuesta(result: dict) -> dict:
     fuentes = result.get("fuentes", {})
     citas = [
@@ -88,7 +128,7 @@ def _contexto_respuesta(result: dict) -> dict:
         "respuesta_markdown": result["respuesta_markdown"],
         "citas": citas,
         "citas_validas": sum(c["cita_valida"] for c in result["citas"]),
-        "leyes": result["leyes"][LEY_COLS].to_dict("records") if result["leyes"] is not None else [],
+        "leyes": _leyes_para_template(result["leyes"]),
         "fallos": result["fallos"][FALLO_COLS].to_dict("records") if result["fallos"] is not None else None,
         "disclaimer": DISCLAIMER,
     }
@@ -128,9 +168,19 @@ def chatbot(request: Request):
     })
 
 
+# Perfiles de respuesta elegibles desde la UI (allowlist: no pasar strings arbitrarios a la API).
+# La reescritura siempre queda en flash; "flash" además usa un contexto más liviano (menos leyes y
+# fragmentos) porque la latencia la domina el tamaño del prompt, no solo el modelo.
+PERFILES_RESPUESTA = {
+    "pro": {"answer_model": config.ANSWER_MODEL, "top_docs": 6, "frags_per_doc": 3, "top_k_fragments": 40},
+    "flash": {"answer_model": config.REWRITE_MODEL, "top_docs": 4, "frags_per_doc": 2, "top_k_fragments": 24},
+}
+
+
 @router.post("/chatbot/mensaje", response_class=HTMLResponse)
-def mensaje(request: Request, caso: str = Form(...), historial: str = Form("")):
+def mensaje(request: Request, caso: str = Form(...), historial: str = Form(""), modelo: str = Form("pro")):
     history = _parse_historial(historial)
+    perfil = PERFILES_RESPUESTA.get(modelo, PERFILES_RESPUESTA["pro"])
     _limpiar_jobs()
     job_id = uuid.uuid4().hex[:12]
     with _jobs_lock:
@@ -145,7 +195,8 @@ def mensaje(request: Request, caso: str = Form(...), historial: str = Form("")):
         try:
             result = answer_case(
                 caso, state.get_law_index(), state.get_case_index(),
-                history=history, on_stage=on_stage,
+                history=history, on_stage=on_stage, vigencia_fn=_vigencia_fn(),
+                **perfil,
             )
             with _jobs_lock:
                 if job_id in _jobs:

@@ -46,6 +46,19 @@ def home(request: Request):
         for p in (config.EMBEDDINGS_NPY_PATH, config.CASE_EMBEDDINGS_NPY_PATH)
         if not p.exists()
     ]
+    # Modelos por tarea (nombres reales desde config, para no desincronizar la explicacion).
+    modelos = [
+        ("Embeddings semánticos", config.EMBEDDING_MODEL,
+         "Vectoriza leyes, fallos y consultas en un mismo espacio (768d) para el retrieval FAISS."),
+        ("Reescritura de consulta", config.REWRITE_MODEL,
+         "Traduce el caso coloquial del chatbot a consultas en lenguaje jurídico formal."),
+        ("Respuesta del chatbot", config.ANSWER_MODEL,
+         "Redacta el marco legal con citas verificadas y prioriza la norma vigente."),
+        ("Resúmenes de vínculos («Explicar IA»)", config.SUMMARY_MODEL,
+         "Explica por qué dos normas se relacionan y su relevancia jurídica, on-demand y cacheado."),
+        ("Clasificación de pares (Fase 3, batch)", "gemini-2.5-flash-lite → flash → pro",
+         "Triage masivo, verificación y confirmación de conflictos en cascada de menor a mayor costo."),
+    ]
     return templates.TemplateResponse(
-        request, "home.html", {"artifacts": rows, "missing_npy": missing_npy}
+        request, "home.html", {"artifacts": rows, "missing_npy": missing_npy, "modelos": modelos}
     )

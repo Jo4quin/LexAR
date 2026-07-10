@@ -17,7 +17,7 @@
   </div>
   <div class="relative flex gap-2">
     <input type="search" name="q" value="{{ q }}" id="input-q"
-           placeholder="Título o id — defensa del consumidor, alquileres, infoleg:638…"
+           placeholder="Título, número o id — 24.240, defensa del consumidor, infoleg:638…"
            hx-get="/explorador" hx-trigger="input[esModoTitulo()] changed delay:300ms"
            hx-include="closest form" hx-target="#resultados" hx-push-url="true" hx-indicator="#buscando"
            autofocus autocomplete="off" aria-label="Buscar norma"
@@ -30,6 +30,11 @@
       <span class="puntos"><span></span><span></span><span></span></span>
     </div>
   </div>
+  <p id="nota-titulo" class="text-xs text-ink-soft mt-2 {{ 'hidden' if modo == 'tema' else '' }}">
+    Buscá por <strong>título</strong> (defensa del consumidor), <strong>número de ley</strong>
+    (24.240 o 24240) o <strong>id de InfoLeg</strong> (infoleg:638). Los resultados aparecen como
+    «Ley 24.240 — Tema»; el número exacto va primero.
+  </p>
   <p id="nota-tema" class="text-xs text-ink-soft mt-2 {{ '' if modo == 'tema' else 'hidden' }}">
     La búsqueda por tema encuentra normas por contenido («protección de datos personales») aunque el
     título no coincida. Se ejecuta con Enter o el botón; la primera vez carga el índice (~30-60 s).
@@ -45,12 +50,14 @@
     return document.querySelector('input[name="modo"]:checked').value === "titulo";
   }
   const notaTema = document.getElementById("nota-tema");
+  const notaTitulo = document.getElementById("nota-titulo");
   const inputQ = document.getElementById("input-q");
   document.querySelectorAll('input[name="modo"]').forEach((radio) => {
     radio.addEventListener("change", () => {
       notaTema.classList.toggle("hidden", esModoTitulo());
+      notaTitulo.classList.toggle("hidden", !esModoTitulo());
       inputQ.placeholder = esModoTitulo()
-        ? "Título o id — defensa del consumidor, alquileres, infoleg:638…"
+        ? "Título, número o id — 24.240, defensa del consumidor, infoleg:638…"
         : "Tema o situación — protección de datos personales, contratos de alquiler…";
       inputQ.focus();
     });
