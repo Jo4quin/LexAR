@@ -1,0 +1,31 @@
+{% if error %}
+<div class="border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm mb-4">{{ error }}</div>
+{% endif %}
+
+{% if resultados is none %}
+<p class="text-sm text-ink-soft">Escribí parte del título, el <strong>número de ley</strong> (<span class="font-mono text-xs">24.240</span>) o el id de InfoLeg (<span class="font-mono text-xs">infoleg:638</span>), o cambiá a «Por tema» para buscar por contenido.</p>
+{% elif resultados %}
+<p class="font-mono text-[11px] tracking-[0.12em] uppercase text-ink-soft mb-2">
+  {% if modo == "tema" %}
+  {{ resultados|length }} normas por similitud semántica
+  {% else %}
+  {{ resultados|length }} resultado{{ "s" if resultados|length != 1 else "" }}{% if resultados|length == 50 %} (máx. 50 — afiná la búsqueda){% endif %}
+  {% endif %}
+</p>
+<ul class="bg-surface border border-line rounded-sm divide-y divide-line">
+  {% for r in resultados %}
+  <li>
+    <a href="/explorador/norma/{{ r.document_id }}" class="group flex items-baseline justify-between gap-4 px-4 py-3 hover:bg-tinta-wash/40 transition-colors">
+      <span class="min-w-0">
+        <span class="block font-display text-[1.02rem] leading-snug group-hover:text-tinta">{{ r.titulo }}</span>
+        <span class="block font-mono text-[11px] text-ink-soft mt-0.5">{{ r.fecha }} · {{ r.document_id }}{% if r.score %} · score {{ r.score }}{% endif %}</span>
+        {% if r.snippet %}<span class="block text-[13px] text-ink-soft leading-snug mt-1.5 italic">«{{ r.snippet }}…»</span>{% endif %}
+      </span>
+      <span class="font-mono text-[11px] uppercase tracking-[0.14em] text-tinta opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">Abrir →</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="text-sm text-ink-soft">No se encontraron normas para «{{ q }}». Probá con menos palabras{% if modo != "tema" %} o con la búsqueda «Por tema»{% endif %}.</p>
+{% endif %}

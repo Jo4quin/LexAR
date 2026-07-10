@@ -1,0 +1,93 @@
+{% if error %}
+<div class="border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm">
+  No se pudo consultar el modelo: {{ error }} — probá de nuevo en unos segundos.
+</div>
+{% else %}
+<div class="bg-surface border border-line rounded-sm px-5 py-4">
+  <p class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-ink-soft mb-3">
+    Consultas derivadas: {{ consultas|join(" · ") }} — materia: {{ materia }}
+  </p>
+
+  <div class="prosa">{{ respuesta_html }}</div>
+
+  <details class="mt-4 border-t border-line">
+    <summary>Citas textuales — {{ citas_validas }}/{{ citas|length }} verificadas contra la fuente</summary>
+    <ul class="space-y-3 pb-3">
+      {% for c in citas %}
+      <li class="flex items-start gap-3">
+        <span class="sello {{ 'sello-verde' if c.cita_valida else 'sello-off' }} mt-1 shrink-0">{{ "Verificada" if c.cita_valida else "No verificada" }}</span>
+        <div>
+          <span class="font-mono text-[11px]">[{{ c.ids_html }}]</span>
+          <span class="font-display italic text-sm text-ink-soft">“{{ c.cita_textual|fix }}”</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+
+  <details class="border-t border-line">
+    <summary>Leyes recuperadas ({{ leyes|length }})</summary>
+    <div class="overflow-x-auto pb-3">
+      <table class="tabla">
+        <thead><tr><th>Id</th><th>Título</th><th>Tipo</th><th>Sanción</th><th class="text-right">Score</th></tr></thead>
+        <tbody>
+          {% for l in leyes %}
+          <tr>
+            <td class="font-mono text-xs whitespace-nowrap"><a href="/explorador/norma/{{ l.document_id }}" class="text-tinta hover:underline">{{ l.document_id }}</a></td>
+            <td>{{ l.titulo }}{% if l.estado %} <span class="badge badge-rojo" title="{{ l.detalle }}">{{ l.estado }}</span>{% endif %}</td>
+            <td class="text-xs">{{ l.tipo_norma }}</td>
+            <td class="font-mono text-xs">{{ l.fecha_sancion }}</td>
+            <td class="font-mono text-xs text-right">{{ "%.3f"|format(l.score) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  {% if fallos %}
+  <details class="border-t border-line">
+    <summary>Fallos CSJN recuperados ({{ fallos|length }})</summary>
+    <div class="overflow-x-auto pb-3">
+      <table class="tabla">
+        <thead><tr><th>Id</th><th>Fecha</th><th>Actor</th><th>Demandado</th><th>Sobre</th><th class="text-right">Score</th></tr></thead>
+        <tbody>
+          {% for f in fallos %}
+          <tr>
+            <td class="font-mono text-xs whitespace-nowrap">
+              {% if f.url %}<a href="{{ f.url }}" target="_blank" rel="noopener" class="text-tinta hover:underline">{{ f.case_id }} ↗</a>{% else %}{{ f.case_id }}{% endif %}
+            </td>
+            <td class="font-mono text-xs whitespace-nowrap">{{ f.fecha }}</td>
+            <td>{{ f.actor|fix }}</td>
+            <td>{{ f.demandado|fix }}</td>
+            <td>{{ f.sobre|fix }}</td>
+            <td class="font-mono text-xs text-right">{{ "%.3f"|format(f.score) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+
+  <div class="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-line">
+    <p class="text-[11px] text-ink-soft flex-1 min-w-60">{{ disclaimer }}</p>
+    <form hx-post="/chatbot/feedback" hx-swap="outerHTML" class="flex items-center gap-2 shrink-0">
+      <input type="hidden" name="caso" value="{{ caso }}">
+      <input type="hidden" name="materia" value="{{ materia }}">
+      <input type="hidden" name="citas_validas" value="{{ citas_validas }}">
+      <input type="hidden" name="citas_total" value="{{ citas|length }}">
+      <span class="font-mono text-[10.5px] uppercase tracking-[0.1em] text-ink-soft">¿Fue útil?</span>
+      <button type="submit" name="voto" value="up" aria-label="Respuesta útil"
+              class="border border-line rounded-sm px-2.5 py-1 text-sm hover:border-verde hover:bg-verde-wash transition-colors cursor-pointer">👍</button>
+      <button type="submit" name="voto" value="down" aria-label="Respuesta no útil"
+              class="border border-line rounded-sm px-2.5 py-1 text-sm hover:border-rojo hover:bg-rojo-wash transition-colors cursor-pointer">👎</button>
+    </form>
+  </div>
+</div>
+<script>
+  if (window.historial) {
+    window.historial.push({ role: "assistant", content: {{ respuesta_markdown|tojson }} });
+  }
+</script>
+{% endif %}

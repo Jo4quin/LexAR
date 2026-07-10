@@ -1,0 +1,15 @@
+pandas
+pyarrow
+numpy
+google-genai
+faiss-cpu
+matplotlib
+scikit-learn
+jupyter
+pypdf
+ftfy
+fastapi
+uvicorn
+jinja2
+python-multipart
+markdown

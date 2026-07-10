@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.titulo[:70] }} — LexAR{% endblock %}
+{% block content %}
+
+<a href="/explorador" class="font-mono text-[11px] tracking-[0.14em] uppercase text-tinta hover:text-tinta-deep">← Explorador</a>
+
+<header class="mt-4 pb-6 border-b border-ink/70">
+  <p class="font-mono text-[11px] tracking-[0.16em] uppercase text-ink-soft mb-2">{{ doc.tipo }}{% if doc.numero != "S/N" %} <span class="text-tinta">{{ doc.numero }}</span>{% endif %} · {{ doc.document_id }}</p>
+  <h1 class="font-display text-[1.9rem] leading-tight max-w-4xl">{{ doc.titulo }}</h1>
+  <div class="flex flex-wrap gap-x-8 gap-y-1 mt-3 font-mono text-xs text-ink-soft">
+    <span>Sanción <span class="text-ink">{{ doc.sancion }}</span></span>
+    <span>Boletín Oficial <span class="text-ink">{{ doc.boletin }}</span></span>
+    <span>Vínculos <span class="text-ink">{{ n_vinculos }}</span></span>
+  </div>
+</header>
+
+{% if doc.vigencia.estado %}
+<div class="mt-5 border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm">
+  <strong class="uppercase tracking-wide">{{ doc.vigencia.estado }}</strong> — {{ doc.vigencia.detalle }}
+</div>
+{% endif %}
+
+{% if n_mods %}
+<div class="mt-5 border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm">
+  <strong>{{ n_mods }} modificaciones posteriores</strong> registradas en Infoleg — el texto mostrado puede no reflejar la versión vigente.
+</div>
+{% endif %}
+
+{% if doc.resumen %}
+<p class="mt-5 font-display italic text-[1.05rem] leading-relaxed text-ink-soft max-w-3xl">{{ doc.resumen }}</p>
+{% endif %}
+
+<div class="mt-4">
+  {% if texto_completo %}
+  <details class="bg-surface border border-line rounded-sm px-4">
+    <summary>Texto completo · {{ texto_chars|miles }} caracteres</summary>
+    <div class="max-h-[26rem] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed py-3 border-t border-line">{{ texto_completo }}</div>
+  </details>
+  {% else %}
+  <p class="text-xs text-ink-soft">Sin texto completo disponible en el corpus (cobertura: 29,6 % de las normas).</p>
+  {% endif %}
+</div>
+
+<section class="mt-10">
+  <h2 class="font-display text-xl mb-1">Normas vinculadas</h2>
+  {% if vinculos %}
+  <p class="text-sm text-ink-soft mb-4">
+    Vínculos oficiales del grafo de Infoleg y vínculos semánticos detectados por el pipeline (Fases 2–5).
+    {% if n_vinculos > vinculos|length %} Mostrando los {{ vinculos|length }} de mayor similitud, de {{ n_vinculos }}.{% endif %}
+  </p>
+  <div class="bg-surface border border-line rounded-sm overflow-x-auto">
+    <table class="tabla">
+      <thead>
+        <tr><th>Norma</th><th>Vínculo</th><th>Relación</th><th>Dirección oficial</th><th class="text-right">Simil.</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for v in vinculos %}
+        <tr>
+          <td>
+            <a href="/explorador/norma/{{ v.other_id }}" class="font-medium hover:text-tinta">{{ v.titulo[:80] }}</a>
+            <div class="font-mono text-[10.5px] text-ink-soft mt-0.5">{{ v.other_id }}</div>
+          </td>
+          <td><span class="badge {{ 'badge-tinta' if v.source_kind in ('official', 'both') else 'badge-neutro' }}">{{ v.source }}</span></td>
+          <td><span class="badge badge-{{ v.label_kind }}">{{ v.label }}</span></td>
+          <td class="text-xs text-ink-soft max-w-44">{{ v.direccion or "—" }}</td>
+          <td class="font-mono text-xs text-right">{{ v.similitud }}</td>
+          <td class="text-right">
+            <button hx-post="/explorador/norma/{{ doc.document_id }}/resumen"
+                    hx-vals='{"other_document_id": "{{ v.other_id }}"}'
+                    hx-target="#resumen-panel" hx-indicator="#resumen-cargando"
+                    hx-disabled-elt="this" hx-swap="innerHTML show:#resumen-panel:top"
+                    class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-tinta border border-tinta/40 rounded-sm px-2.5 py-1 hover:bg-tinta hover:text-white transition-colors disabled:opacity-40 whitespace-nowrap cursor-pointer">
+              Explicar IA
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div id="resumen-cargando" class="htmx-indicator items-center gap-3 mt-4 text-sm text-ink-soft">
+    <span class="puntos"><span></span><span></span><span></span></span>
+    Generando resumen — la primera vez consulta al modelo; después sale del caché.
+  </div>
+  <div id="resumen-panel" class="mt-4" aria-live="polite"></div>
+  {% else %}
+  <p class="text-sm text-ink-soft">Sin vínculos registrados para esta norma.</p>
+  {% endif %}
+</section>
+
+{% if vinculos %}
+<section class="mt-10">
+  <h2 class="font-display text-xl mb-1">Mapa de vínculos</h2>
+  <p class="text-sm text-ink-soft mb-4">
+    El vecindario normativo de esta norma como grafo interactivo — incluye también los vínculos
+    entre las normas vecinas, así los clusters (regímenes que se modifican entre sí) se ven a
+    simple vista. Click en un nodo abre esa norma.
+  </p>
+  <button id="btn-grafo"
+          class="font-mono text-[11px] tracking-[0.12em] uppercase text-tinta border border-tinta/40 rounded-sm px-3 py-1.5 hover:bg-tinta hover:text-white transition-colors disabled:opacity-40 cursor-pointer">
+    Ver mapa
+  </button>
+  <div id="grafo-wrap" class="hidden">
+    <div id="grafo" class="h-[440px] bg-surface border border-line rounded-sm"></div>
+    <div class="flex flex-wrap gap-x-5 gap-y-1 mt-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-soft">
+      <span class="flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-ink-soft"></span> oficial</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-dashed border-ink-soft"></span> semántico</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5" style="background:#4A3C8C"></span> modificación</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5" style="background:#A99BE3"></span> superposición</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5" style="background:#C9C4B8"></span> otras</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#A93D32"></span> nodo derogada</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full border-2" style="border-color:#C68A2E"></span> muy modificada</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full border-2 border-ink-soft/40"></span> tamaño = similitud</span>
+    </div>
+  </div>
+</section>
+<script>
+  document.getElementById("btn-grafo").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-grafo");
+    btn.disabled = true;
+    btn.textContent = "Cargando mapa…";
+    try {
+      if (!window.vis) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js";
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const data = await (await fetch("/explorador/norma/{{ doc.document_id }}/grafo.json")).json();
+      btn.classList.add("hidden");
+      document.getElementById("grafo-wrap").classList.remove("hidden");
+      const red = new vis.Network(
+        document.getElementById("grafo"),
+        { nodes: new vis.DataSet(data.nodes), edges: new vis.DataSet(data.edges) },
+        {
+          nodes: { shape: "dot", borderWidth: 1.5, font: { face: "Archivo", size: 12, color: "#211F1B" } },
+          edges: { smooth: false },
+          physics: { barnesHut: { gravitationalConstant: -3500, springLength: 140 }, stabilization: { iterations: 120 } },
+          interaction: { hover: true },
+        }
+      );
+      red.on("click", (params) => {
+        if (params.nodes.length && params.nodes[0] !== "{{ doc.document_id }}") {
+          window.location.href = "/explorador/norma/" + params.nodes[0];
+        }
+      });
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "Reintentar mapa";
+    }
+  });
+</script>
+{% endif %}
+
+<section class="mt-10">
+  <h2 class="font-display text-xl mb-1">Fallos CSJN relacionados</h2>
+  <p class="text-sm text-ink-soft mb-4">Sentencias de la Corte Suprema publicadas en SAIJ desde 2020, vinculadas por similitud semántica.</p>
+  {% if fallos is none %}
+  <p class="text-sm text-ink-soft">Todavía no se corrió la Fase 4 (jurisprudencia) — ver <span class="font-mono text-xs">notebooks/Jurisprudencia_CSJN.ipynb</span>.</p>
+  {% elif fallos %}
+  <div class="grid md:grid-cols-2 gap-3">
+    {% for f in fallos %}
+    <article class="bg-surface border border-line border-l-[3px] border-l-tinta rounded-sm px-4 py-3">
+      <h3 class="font-display text-[0.98rem] leading-snug">{{ f.caratula }}</h3>
+      <p class="font-mono text-[11px] text-ink-soft mt-1.5">{{ f.tipo }} · {{ f.fecha }} · simil. {{ f.similitud }}</p>
+      {% if f.url %}
+      <a href="{{ f.url }}" target="_blank" rel="noopener" class="inline-block mt-2 font-mono text-[11px] tracking-[0.1em] uppercase text-tinta hover:text-tinta-deep">Ver en SAIJ ↗</a>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-ink-soft">Sin fallos relacionados por encima del umbral de similitud.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

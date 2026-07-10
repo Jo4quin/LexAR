@@ -1,25 +1,42 @@
 # LexAR
 
-LexAR es un proyecto academico para la materia **Procesamiento de Lenguaje Natural**. El objetivo es construir una base de conocimiento sobre normativa nacional argentina y usarla para detectar posibles redundancias, contradicciones o solapamientos entre normas. A partir de ese trabajo, el proyecto tambien explora un asistente legal capaz de ayudar a redactar, revisar y desafiar escritos legales usando evidencia normativa recuperada del corpus.
+LexAR es un proyecto academico para la materia **Procesamiento de Lenguaje Natural**. Construye una
+base de conocimiento sobre normativa nacional argentina (embeddings semanticos, grafo de vinculos,
+clasificacion de relaciones entre normas) y la usa como motor de un **Asistente Juridico para
+Abogados**: explorador de leyes con normas vinculadas y resumenes generados por IA, jurisprudencia de
+la Corte Suprema (SAIJ, desde 2020), y un chatbot que responde casos en lenguaje natural con citas
+normativas verificadas.
+
+> **Pivot (2026-07-08):** el proyecto arranco con un enfoque de deteccion de redundancias y
+> contradicciones (Fases 1-3, completas, descriptas mas abajo) y a partir de ahi se redirecciono hacia
+> el producto para abogados. Las Fases 1-3 **no se descartan** — son la base del producto: los
+> embeddings y el grafo de vinculos son el motor de retrieval, y el motor LLM de clasificacion se
+> reusa para generar los resumenes de vinculos. El plan de implementacion completo del pivot
+> (Fases 4-8) esta en `PLAN.md`.
 
 ## Objetivo general
 
-Construir un pipeline de PLN que transforme textos legales argentinos en una base consultable por fragmentos, detecte normas semanticamente cercanas y clasifique pares candidatos segun el tipo de relacion juridico-linguistica que presentan.
+Construir un pipeline de PLN que transforme textos legales argentinos y fallos de la Corte Suprema en
+una base consultable por fragmentos, detecte normas semanticamente cercanas y vinculadas oficialmente,
+y ponga ese conocimiento al servicio de un asistente juridico para abogados.
 
-La demo esperada debe mostrar:
+El producto (demo) debe mostrar:
 
-- ejemplos de posibles contradicciones, redundancias o solapamientos encontrados;
-- evidencia textual de los articulos o fragmentos involucrados;
-- una explicacion generada por modelo;
-- una propuesta de redaccion alternativa o texto de reemplazo que reduzca la ambiguedad o duplicacion detectada.
+- un explorador de leyes con sus normas vinculadas (oficiales y semanticas) y jurisprudencia relevante
+  de la CSJN desde 2020;
+- un resumen generado por IA que explica por que dos normas estan relacionadas y su relevancia
+  juridica;
+- un chatbot que, dado un caso en lenguaje natural, devuelve las leyes aplicables, la normativa
+  relacionada y los fallos relevantes, con citas textuales verificadas contra la fuente.
 
 ## Ideas principales
 
-### 1. Deteccion de redundancias y contradicciones normativas
+### 1. Deteccion de redundancias y contradicciones normativas (Fases 1-3, completas)
 
-La primera linea del proyecto busca analizar leyes nacionales argentinas para encontrar relaciones problematicas entre fragmentos normativos.
+La primera linea del proyecto analizo leyes nacionales argentinas para encontrar relaciones
+problematicas entre fragmentos normativos.
 
-Se consideran relevantes, entre otros, estos casos:
+Se consideraron relevantes, entre otros, estos casos:
 
 - contradicciones directas entre obligaciones, prohibiciones, permisos o procedimientos;
 - normas viejas no derogadas que entren en tension con normas posteriores;
@@ -28,18 +45,21 @@ Se consideran relevantes, entre otros, estos casos:
 - excepciones que vuelven ambigua una regla general;
 - normas que regulan lo mismo o son funcionalmente equivalentes aunque esten redactadas de manera distinta.
 
-El sistema no parte de la idea de afirmar automaticamente que existe una contradiccion juridica definitiva. En el MVP, el resultado debe entenderse como una **hipotesis priorizada para revision humana**.
+El sistema no parte de la idea de afirmar automaticamente que existe una contradiccion juridica
+definitiva — el resultado se entiende como una **hipotesis priorizada para revision humana**. Esta
+clasificacion (`possible_conflict`, `possible_overlap`, etc.) sigue viva como una de las senales que
+alimentan los vinculos entre normas del producto (Fase 5), ya no como el objetivo final del proyecto.
 
-### 2. Asistente legal sobre la base de conocimiento
+### 2. Asistente juridico para abogados (Fases 4-8, el pivot actual)
 
-La segunda linea reutiliza el corpus, los embeddings, los clusters y los analisis previos para crear un asistente legal. El asistente deberia poder ayudar a:
+La segunda linea reutiliza el corpus, los embeddings y la clasificacion de la primera para construir
+un asistente juridico orientado a la investigacion, no a la redaccion. El asistente permite:
 
-- redactar una primera version de un escrito legal;
-- revisar un escrito existente;
-- encontrar fundamentos normativos;
-- detectar argumentos debiles o normas potencialmente conflictivas;
-- sugerir contraargumentos;
-- proponer mejoras de redaccion con citas al corpus usado.
+- explorar una ley y ver sus normas vinculadas, con un resumen IA de cada relacion;
+- consultar la jurisprudencia de la Corte Suprema (SAIJ, desde 2020) asociada a una norma;
+- plantear un caso en lenguaje natural y recibir el marco legal aplicable, con fuentes citadas.
+
+Ver `PLAN.md` para el detalle de implementacion de cada fase.
 
 Para el alcance inicial, esta idea queda como extension natural del trabajo principal. El foco inmediato es construir una buena base de conocimiento y una demo de deteccion + propuesta de redaccion alternativa.
 
@@ -64,18 +84,26 @@ El corpus apunta a **leyes y decreto-leyes nacionales argentinas**. No incluye, 
 
 El alcance real depende de la cobertura efectiva de los datos ya recolectados.
 
-### Paquetes presentes en el repositorio
+### Paquete presente en el repositorio
 
-- `lexar_dataset_2026-06-25/`: snapshot con corpus procesado, documentacion tecnica y tabla unificada de texto. Segun su README, contiene 30.061 documentos y 23.585 documentos con texto limpio, equivalentes al 78,5 % del corpus.
-- `lexar_datos_infoleg_saij/`: paquete armado posteriormente con datos Infoleg + SAIJ. Su `LEEME.md` describe 30.061 documentos, pero una cobertura menor de texto completo en SAIJ para ese paquete.
+Los datos **no se versionan en git** (son cientos de MB y superan el limite de GitHub); se comparten por
+fuera del repo y viven localmente en `data/`, que esta en `.gitignore`. Ver `CLAUDE.md` para instrucciones
+de donde colocarlos.
+
+- `data/lexar_datos_infoleg_saij/`: paquete con datos Infoleg + SAIJ combinados. Su `LEEME.md` describe
+  30.061 documentos totales, de los cuales 8.887 (29,6 %) tienen texto completo (8.684 de Infoleg, 203 de
+  SAIJ) tras deduplicar y descartar registros sin texto util.
 
 Para el desarrollo inicial conviene tomar como punto de partida el archivo:
 
 ```text
-lexar_dataset_2026-06-25/data/processed/text_corpus/text_versions.parquet
+data/lexar_datos_infoleg_saij/corpus_unificado/text_versions.parquet
 ```
 
-Este archivo contiene textos limpios y unificados, listos para segmentacion. La diferencia entre snapshots debe documentarse en el informe final y resolverse antes de fijar resultados experimentales definitivos.
+Este archivo contiene los 9.518 textos limpios y unificados (Infoleg + SAIJ, con `quality_flag`), listos
+para segmentacion. Un paquete anterior mas amplio (`lexar_dataset_2026-06-25/`) fue mencionado en una
+version previa de este documento pero nunca llego a incorporarse al proyecto; si aparece en el futuro,
+documentar la diferencia de cobertura contra este paquete antes de fijar resultados experimentales.
 
 ## Unidad de analisis
 
@@ -243,58 +271,164 @@ Si se consigue revision de abogados o docentes, se puede construir un pequeno co
 
 ## Plan de trabajo
 
-### Fase 1: Consolidacion de datos
+### Fase 1: Consolidacion de datos — completa
 
-- Elegir el snapshot principal.
+- Elegir el snapshot principal: `lexar_datos_infoleg_saij`.
 - Confirmar conteos de documentos, textos y fuentes.
 - Definir esquema de `legal_fragments`.
 - Implementar o ajustar segmentacion por articulo.
 
-### Fase 2: Embeddings y busqueda
+### Fase 2: Embeddings y busqueda — completa
 
-- Generar embeddings sobre una muestra inicial.
-- Construir indice vectorial.
-- Recuperar vecinos cercanos por fragmento.
-- Inspeccionar clusters y subespacios.
+- Generar embeddings sobre el corpus completo (no solo una muestra): 113.895 fragmentos, 112.582
+  embeddings unicos via Vertex AI (`gemini-embedding-001`).
+- Construir indice vectorial (FAISS, similitud coseno exacta).
+- Recuperar vecinos cercanos por fragmento: 679.720 pares candidatos.
+- Inspeccionar clusters y subespacios: 8.942 clusters exploratorios; visualizacion PCA/t-SNE.
 
-### Fase 3: Analisis de candidatos
+Detalle tecnico completo en `CLAUDE.md` (seccion "Notebook architecture").
 
-- Disenar prompt de clasificacion.
-- Clasificar pares candidatos.
-- Guardar etiquetas, explicaciones y evidencia.
-- Ajustar filtros para reducir falsos positivos.
+### Fase 3: Analisis de candidatos — completa
 
-### Fase 4: Redaccion alternativa
+- Disenar prompt de clasificacion: guia de las 6 etiquetas, exige citar evidencia textual de ambos
+  fragmentos, usa el grafo de modificaciones de Infoleg como pista (no como etiqueta automatica).
+- Reglas deterministas antes del LLM (near_identical, boilerplate): resolvieron 23.889 de 68.050 pares
+  (35%) sin costo de LLM.
+- Clasificar pares candidatos en dos niveles: triage con `gemini-2.5-flash-lite` sobre 44.161 pares,
+  verificacion con `gemini-2.5-flash` sobre los 440 marcados `possible_conflict` — confirmo solo 84 (19%),
+  bajando el resto a `different_scope`/`possible_modification`/`possible_overlap`.
+- Guardar etiquetas, confianza, explicacion y evidencia citada en `candidate_classifications.parquet`.
+- Golden set estratificado (80 pares) para evaluacion humana, con guia de etiquetado incluida en el
+  notebook.
 
-- Para casos relevantes, pedir al modelo una propuesta de armonizacion o reemplazo.
-- Exigir que la propuesta cite los fragmentos usados.
-- Comparar resultados manualmente.
+Distribucion final: 25.017 `possible_overlap`, 24.868 `neutral`, 14.077 `possible_modification`, 3.607
+`different_scope`, 397 `needs_review`, 84 `possible_conflict`. Detalle tecnico completo en `CLAUDE.md`
+(seccion "Notebook architecture (Fase 3)").
 
-### Fase 5: Informe y demo
+### Fase 3.5: re-verificacion de conflictos, criterio "instrumentos paralelos" — completa (2026-07-10)
 
-- Preparar ejemplos representativos.
-- Mostrar metodologia de punta a punta.
-- Incluir limitaciones.
-- Presentar metricas simples de evaluacion.
+Al usar la app se detecto que la mayoria de los 84 `possible_conflict` no eran contradicciones
+reales sino **instrumentos paralelos**: tratados bilaterales de Argentina con una contraparte
+distinta cada uno (convenios de doble imposicion, extradicion, traslado de condenados), donde
+reglas distintas por pais son normales, no un conflicto. El prompt de verificacion original nunca
+veia el resumen de la norma completa (donde esta el pais/beneficiario) ni exigia el test decisivo:
+pueden ambas normas aplicar a la vez a la misma situacion y los mismos sujetos?
+
+`notebooks/Reverificacion_Conflictos.ipynb` re-verifica los 834 pares en cuestion (440 marcados en
+triage + 394 `needs_review`) con un prompt v2 que agrega ese contexto, enumera la doctrina de
+instrumentos paralelos, y exige un campo `escenario_conflicto` (la situacion concreta de colision;
+si el modelo no puede describirla, no es conflicto). Los sobrevivientes se confirman con
+`gemini-2.5-pro`.
+
+**Resultado**: 730 de 834 pares (87,5%) pasaron a `different_scope`; de los 6 que sobrevivieron a
+la primera pasada, `gemini-2.5-pro` confirmo 4. **84 → 4 conflictos confirmados**, todos con un
+`escenario_conflicto` concreto: dos leyes que aprueban versiones textualmente distintas del mismo
+articulo de un convenio; dos leyes que renumeran los mismos articulos del Codigo Penal (306-308) a
+numeros incompatibles; dos regimenes jubilatorios especiales con haberes distintos (85% vs 82%)
+para el mismo personal; y dos normas ambientales con multas supletorias incompatibles para la misma
+infraccion.
+
+`outputs/candidate_classifications.parquet` (v1) nunca se sobreescribe — todo lo nuevo vive en
+archivos `_v2` y `config.CLASSIFICATIONS_VERSION` (default `"v2"`) es el unico punto de corte;
+volver a v1 es cambiar esa constante y reiniciar el server, verificado sin perdida de datos.
+Detalle tecnico completo en `CLAUDE.md` (seccion "Fase 3.5").
+
+### Fase 4 (vieja) y Fase 5 (vieja): reemplazadas por el pivot
+
+Las fases "Redaccion alternativa" e "Informe y demo" que originalmente seguian a la deteccion de
+contradicciones quedan **reemplazadas** por las Fases 4-8 del pivot (abajo). El detalle completo de
+implementacion esta en `PLAN.md`.
+
+### Fase 4: Jurisprudencia CSJN (SAIJ) — completa
+
+- Scraping de fallos de la Corte Suprema publicados en SAIJ, 2020 en adelante (via la API JSON de
+  SAIJ; el texto completo viene como PDF, extraido con `pypdf`).
+- Segmentacion con el mismo `chunk_text()` de la Fase 1 (los fallos no tienen estructura de articulos).
+- Embeddings con el mismo pipeline de la Fase 2 (`gemini-embedding-001`, checkpointing reanudable).
+- Vinculo ley↔fallo por similitud semantica contra el indice FAISS de leyes de la Fase 2.
+
+Resultado (2026-07-09): **1.234 fallos** CSJN 2020-2026, **8.702 fragmentos** unicos, **8.702/8.702
+embeddings**, **28.930 vinculos** ley↔fallo entre 1.225 fallos y 2.743 normas. Dos hallazgos tecnicos no
+anticipados: un limite de profundidad de paginacion en el backend de SAIJ (resuelto paginando por año
+calendario via el facet `Fecha/<año>`) y un bug de colision de indices de checkpoint en el pipeline de
+embeddings (corregido). Detalle completo en `CLAUDE.md` y en `notebooks/Jurisprudencia_CSJN.ipynb`.
+
+### Fase 5: Vinculos entre normas + resumenes IA — completa
+
+- Consolidacion de `analysis_candidates` (Fase 2) y `candidate_classifications` (Fase 3) a nivel
+  documento, unida con el grafo oficial de modificaciones de Infoleg → `norm_links.parquet`.
+- Resumenes de cada vinculo generados por IA **on-demand con cache** (no batch masivo): se generan la
+  primera vez que se consultan y quedan cacheados en `link_summaries.parquet`.
+
+Resultado: **48.276 vinculos** (38.552 semanticos, 8.297 oficiales, 1.427 ambos). Sanity check contra la
+Ley 24.240 (Defensa del Consumidor): 20 vinculos, 18 modificaciones posteriores detectadas
+correctamente. Cache de resumenes verificado (la segunda consulta al mismo par no vuelve a llamar al
+LLM). Detalle tecnico en `notebooks/Vinculos_Normas.ipynb` y `src/lexar/summaries.py`.
+
+### Fase 6: Chatbot RAG — completa
+
+- Extraccion del core compartido (rate limiter, embeddings, retrieval FAISS) a `src/lexar/`, reusado
+  tanto por los notebooks nuevos como por la app.
+- Pipeline del chatbot: *query rewriting* (caso coloquial → consultas en lenguaje juridico) →
+  retrieval sobre leyes y fallos → respuesta con citas obligatorias → validacion automatica de que
+  cada cita es texto literal de la fuente.
+- Set de casos de prueba anotado a mano (`eval/casos_prueba.csv`) como ground truth de la Fase 8.
+
+Resultado: verificado end-to-end contra ambos indices FAISS (leyes + fallos). Sobre los 17 casos de
+prueba: **143 citas** generadas, **93,7% trazables** (verificadas textualmente contra la fuente
+citada). Detalle tecnico en `src/lexar/chatbot.py`.
+
+### Fase 7: App web (FastAPI + HTMX + Tailwind) — completa
+
+Originalmente construida en Streamlit; reconstruida el 2026-07-10 como app FastAPI con templates
+Jinja2, HTMX para la interactividad y Tailwind CSS (CDN v4), con identidad visual propia.
+
+- **Explorador** (`app/routes/explorador.py`): busqueda por titulo (en vivo) o **por tema**
+  (semantica, sobre el indice FAISS de la Fase 2, con score y snippet por resultado), URL
+  compartible (`/explorador?q=...&modo=...`), ficha de norma con URL propia
+  (`/explorador/norma/infoleg:638`), advertencia de vigencia, tabla de normas vinculadas con
+  boton "Explicar IA" por fila (resumen on-demand con cache), **mapa de vinculos** (grafo
+  interactivo del vecindario normativo, con vinculos entre vecinos, via vis-network) y fallos
+  CSJN relacionados.
+- **Hallazgos** (`app/routes/hallazgos.py`): los pares *possible_conflict* confirmados (4, tras
+  el re-criterio de la Fase 3.5 — ver arriba), agrupados por par de normas, con explicacion del
+  verificador, el escenario concreto de colision, ambos fragmentos y boton "Explicar IA" — la
+  conexion visible del producto con la mision original del proyecto.
+- **Chatbot** (`app/routes/chatbot.py`): chat **multi-turno** (las repreguntas se entienden en
+  contexto) sobre el pipeline de la Fase 6, con **progreso en vivo por etapa** (reescritura →
+  busqueda → redaccion, via polling HTMX), **citas clickeables** (frag → ficha de la norma,
+  cfrag → fallo en SAIJ), sello de verificacion por cita y **feedback 👍/👎** persistido en
+  `outputs/feedback_chatbot.parquet`.
+- **Home** (`app/routes/home.py`): estado de los datos generados por cada fase.
+
+Correr con `python -m uvicorn app.main:app` desde la raiz del repo (por defecto en
+`http://127.0.0.1:8000`). Verificado (2026-07-10) con click-through completo en navegador: busqueda,
+ficha de la Ley 24.240 (advertencia de vigencia + 20 vinculos), resumen IA desde cache, y consulta
+al chatbot con citas verificadas.
+
+### Fase 8: Evaluacion e informe — completa
+
+- Precision@K / Recall del chatbot sobre `casos_prueba.csv`, con y sin *query rewriting*.
+- Trazabilidad: porcentaje de citas del chatbot verificadas automaticamente contra la fuente.
+- Muestra estratificada para rubrica humana de calidad de los resumenes de vinculos.
+- Informe final con metodologia, limitaciones y ejemplos.
+
+Resultado (2026-07-09), sobre los 17 casos de `eval/casos_prueba.csv`: **Recall@10 73,5%** con query
+rewriting vs. **70,6%** sin — la mejora que justifica la decision de diseño. Precision@10 practicamente
+plana (10,0% vs. 9,4%), esperable dado que cada caso tiene solo 1-2 leyes esperadas frente a 10
+posiciones evaluadas. Trazabilidad de citas: **93,7%** (134/143) en la corrida original;
+**re-medida el 2026-07-10 tras corregir el parseo de citas con multiples ids en un corchete:
+96,3% (157/163)** (`outputs/eval/citation_traceability_v2.csv`). La rubrica humana de resumenes de
+vinculos (`outputs/eval/rubrica_resumenes.csv`) quedo generada pero sin completar — requiere revision
+manual del equipo. Detalle tecnico en `notebooks/Evaluacion_Producto.ipynb`.
 
 ## Entregables
 
-- Base de fragmentos legales segmentados.
-- Indice de embeddings.
-- Tabla de candidatos recuperados.
-- Tabla de analisis clasificados.
-- Ejemplos curados de contradiccion, redundancia o solapamiento.
-- Propuestas de redaccion alternativa.
+- Base de fragmentos legales segmentados (leyes y fallos CSJN).
+- Indices de embeddings (leyes y jurisprudencia).
+- Grafo de vinculos entre normas, con resumenes generados por IA.
+- Chatbot juridico con citas verificadas.
+- App web FastAPI + HTMX (explorador + chatbot).
+- Metricas de evaluacion (precision/recall de retrieval, trazabilidad de citas).
 - Informe academico-tecnico.
-- Demo reproducible en notebook o aplicacion minima.
-
-## Proxima decision
-
-La decision tecnica mas importante es fijar el **snapshot principal** y el **subconjunto inicial**.
-
-Recomendacion:
-
-1. Usar `lexar_dataset_2026-06-25/data/processed/text_corpus/text_versions.parquet` como base inicial por su mayor cobertura documentada.
-2. Empezar con una muestra tematica o temporal para reducir ruido.
-3. Validar manualmente los primeros 20 a 50 pares recuperados antes de escalar.
 

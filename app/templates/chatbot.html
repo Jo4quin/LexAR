@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Chatbot — LexAR{% endblock %}
+{% block content %}
+
+<div class="flex flex-wrap items-end justify-between gap-4 mb-3">
+  <div>
+    <p class="font-mono text-[11px] tracking-[0.18em] uppercase text-tinta mb-2">Chatbot RAG · citas verificadas</p>
+    <h1 class="font-display text-3xl">Consultá un caso</h1>
+  </div>
+  <a href="/chatbot" class="font-mono text-[11px] uppercase tracking-[0.12em] text-tinta border border-tinta/40 rounded-sm px-3 py-1.5 hover:bg-tinta hover:text-white transition-colors">
+    Nueva conversación
+  </a>
+</div>
+
+<div class="border-l-[3px] border-tinta bg-tinta-wash/60 px-4 py-3 text-sm mb-4">
+  <span class="font-display">§</span> {{ disclaimer }}
+</div>
+
+{% if sin_fallos %}
+<div class="border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm mb-4">
+  Índice de fallos no disponible (correr la Fase 4) — el chatbot responderá solo con leyes.
+</div>
+{% endif %}
+
+<div id="chat" class="space-y-4">
+  <div class="bg-surface border border-line rounded-sm px-5 py-4 text-sm text-ink-soft leading-relaxed max-w-2xl">
+    Planteá un caso en lenguaje natural — por ejemplo, <em>«me chocaron el auto y el otro
+    conductor no tiene seguro»</em> — y te devuelvo el marco legal aplicable con citas
+    textuales verificadas y fallos recientes de la CSJN.
+  </div>
+</div>
+
+<form id="chat-form" hx-post="/chatbot/mensaje" hx-target="#chat" hx-swap="beforeend show:bottom"
+      hx-disabled-elt="find input, find button"
+      class="mt-6 sticky bottom-4">
+  <div class="flex items-center gap-2 mb-2" role="radiogroup" aria-label="Modelo de respuesta">
+    <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">Modelo:</span>
+    {% for valor, nombre, detalle in [("pro", "Pro", "máxima calidad, ~1 min"), ("flash", "Flash", "más rápido, contexto liviano, ~40 s")] %}
+    <label class="cursor-pointer" title="{{ detalle }}">
+      <input type="radio" name="modelo" value="{{ valor }}" class="sr-only peer" {{ "checked" if valor == "pro" }}>
+      <span class="inline-block font-mono text-[10.5px] tracking-[0.1em] uppercase px-2.5 py-1 rounded-sm border border-line text-ink-soft
+                   peer-checked:bg-tinta peer-checked:text-white peer-checked:border-tinta transition-colors">{{ nombre }}</span>
+    </label>
+    {% endfor %}
+    <span id="modelo-detalle" class="text-[11px] text-ink-soft">máxima calidad, ~1 min</span>
+  </div>
+  <div class="flex gap-2">
+    <input name="caso" required autocomplete="off" placeholder="Escribí tu caso…" aria-label="Caso a consultar"
+           class="flex-1 bg-surface border border-line rounded-sm px-4 py-3 text-[0.95rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none shadow-sm">
+    <button type="submit"
+            class="bg-tinta text-white font-mono text-[11px] tracking-[0.14em] uppercase px-5 rounded-sm hover:bg-tinta-deep transition-colors disabled:opacity-50 cursor-pointer">
+      Consultar
+    </button>
+  </div>
+</form>
+
+<script>
+  const form = document.getElementById("chat-form");
+  const chat = document.getElementById("chat");
+  // Historial de la conversacion, solo en el cliente: se manda como JSON en cada consulta para
+  // que answer_case() entienda repreguntas ("¿y si el conductor era menor?"). El turno del
+  // asistente lo agrega un <script> dentro del partial de respuesta.
+  window.historial = [];
+  form.addEventListener("htmx:configRequest", (e) => {
+    const caso = form.elements.caso.value.trim();
+    if (!caso) return;
+    e.detail.parameters.historial = JSON.stringify(window.historial);
+    window.historial.push({ role: "user", content: caso });
+    // La burbuja del usuario se agrega al mandar (no al responder): el mensaje propio tiene
+    // que verse de inmediato; el progreso real lo muestra la burbuja de polling.
+    const bubble = document.createElement("div");
+    bubble.className = "ml-auto w-fit max-w-[75%] bg-tinta text-white rounded-sm px-4 py-2.5 text-sm leading-relaxed";
+    bubble.textContent = caso;
+    chat.appendChild(bubble);
+    bubble.scrollIntoView({ behavior: "smooth", block: "end" });
+  });
+  form.addEventListener("htmx:afterRequest", () => {
+    // Limpiar solo el caso (no form.reset(), que volvería el modelo a Pro cada vez).
+    form.elements.caso.value = "";
+    form.elements.caso.focus();
+  });
+  // Detalle del modelo elegido junto al toggle.
+  const detalle = document.getElementById("modelo-detalle");
+  const DETALLES = { pro: "máxima calidad, ~1 min", flash: "más rápido, contexto liviano, ~40 s" };
+  form.querySelectorAll('input[name="modelo"]').forEach((r) => {
+    r.addEventListener("change", () => { detalle.textContent = DETALLES[r.value]; });
+  });
+</script>
+
+{% endblock %}

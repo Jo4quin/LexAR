@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}LexAR — Asistente Jurídico{% endblock %}</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90' fill='%234A3C8C' font-family='Georgia'>§</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Chivo+Mono:wght@400;500&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"></script>
+<style type="text/tailwindcss">
+/* Identidad "tinta y foja": papel hueso, superficies blancas densas y el violeta de la
+   tinta de sello — el artefacto mas reconocible del expediente judicial argentino.
+   Tipografia: Libre Caslon (la letra historica de los libros de derecho) para titulos;
+   Archivo y Chivo Mono (Omnibus-Type, Buenos Aires) para UI y datos. */
+@theme {
+  --color-paper: #F5F4EF;
+  --color-surface: #FFFFFF;
+  --color-ink: #211F1B;
+  --color-ink-soft: #5C574C;
+  --color-tinta: #4A3C8C;
+  --color-tinta-deep: #372D6E;
+  --color-tinta-bright: #A99BE3;
+  --color-tinta-wash: #EDEAF7;
+  --color-verde: #2F7A4D;
+  --color-verde-wash: #E7F1EA;
+  --color-rojo: #A93D32;
+  --color-rojo-wash: #F7EAE7;
+  --color-line: #E3E0D6;
+  --font-display: "Libre Caslon Text", Georgia, serif;
+  --font-sans: "Archivo", system-ui, sans-serif;
+  --font-mono: "Chivo Mono", ui-monospace, "Courier New", monospace;
+}
+
+/* --- Sello: la firma visual. Reservado para veredictos (cita verificada, artefacto listo). --- */
+.sello {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 2px;
+  transform: rotate(-1.5deg);
+  white-space: nowrap;
+}
+.sello-verde { color: var(--color-verde); }
+.sello-tinta { color: var(--color-tinta); }
+.sello-rojo { color: var(--color-rojo); }
+.sello-off { color: #9A948A; border-style: dashed; outline-style: dashed; transform: none; }
+
+/* --- Badges informativos (tipo de vinculo, etiqueta de relacion): pills quietas. --- */
+.badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.badge-tinta { background: var(--color-tinta-wash); color: var(--color-tinta-deep); }
+.badge-neutro { background: #EEECE5; color: var(--color-ink-soft); }
+.badge-rojo { background: var(--color-rojo-wash); color: var(--color-rojo); }
+.badge-verde { background: var(--color-verde-wash); color: var(--color-verde); }
+
+/* --- Tablas de datos densas. --- */
+.tabla { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
+.tabla th {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  text-align: left;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--color-ink);
+}
+.tabla td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+.tabla tbody tr:hover { background: color-mix(in srgb, var(--color-tinta-wash) 45%, transparent); }
+
+/* --- Secciones plegables. --- */
+summary {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-tinta);
+  cursor: pointer;
+  padding: 0.45rem 0;
+  user-select: none;
+}
+summary:hover { color: var(--color-tinta-deep); }
+
+/* --- Prosa del chatbot (markdown renderizado). --- */
+.prosa { font-size: 0.925rem; line-height: 1.65; }
+.prosa p { margin: 0.55rem 0; }
+.prosa h1, .prosa h2, .prosa h3, .prosa h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.02rem;
+  margin: 1rem 0 0.35rem;
+}
+.prosa ul { list-style: disc; padding-left: 1.3rem; margin: 0.55rem 0; }
+.prosa ol { list-style: decimal; padding-left: 1.3rem; margin: 0.55rem 0; }
+.prosa li { margin: 0.25rem 0; }
+.prosa strong { font-weight: 600; }
+.prosa a { color: var(--color-tinta); text-decoration: underline; }
+.prosa code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--color-tinta-wash);
+  color: var(--color-tinta-deep);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.prosa blockquote { border-left: 3px solid var(--color-tinta); padding-left: 0.8rem; font-style: italic; }
+
+/* --- HTMX: indicadores de carga. --- */
+.htmx-indicator { display: none; }
+.htmx-request.htmx-indicator, .htmx-request .htmx-indicator { display: flex; }
+@keyframes puntito { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+.puntos { display: inline-flex; gap: 4px; align-items: center; }
+.puntos span { width: 5px; height: 5px; border-radius: 50%; background: var(--color-tinta); animation: puntito 1.2s infinite; }
+.puntos span:nth-child(2) { animation-delay: 0.2s; }
+.puntos span:nth-child(3) { animation-delay: 0.4s; }
+
+:focus-visible { outline: 2px solid var(--color-tinta); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="bg-paper text-ink font-sans antialiased min-h-screen flex flex-col">
+
+<header class="bg-ink text-paper">
+  <div class="max-w-6xl mx-auto px-6 flex items-center justify-between">
+    <a href="/" class="font-display text-[1.35rem] leading-none py-3">Lex<span class="text-tinta-bright">AR</span><span class="text-tinta-bright text-sm align-top ml-0.5">§</span></a>
+    {% set path = request.url.path %}
+    <nav class="flex">
+      {% for href, nombre in [("/", "Inicio"), ("/explorador", "Explorador"), ("/hallazgos", "Hallazgos"), ("/chatbot", "Chatbot")] %}
+      {% set activo = (path == href) if href == "/" else path.startswith(href) %}
+      <a href="{{ href }}"
+         class="px-4 py-4 font-mono text-[11px] tracking-[0.16em] uppercase border-b-2 transition-colors
+                {% if activo %}border-tinta-bright text-white{% else %}border-transparent text-paper/60 hover:text-white{% endif %}">
+        {{ nombre }}
+      </a>
+      {% endfor %}
+    </nav>
+  </div>
+</header>
+
+<main class="flex-1 w-full max-w-6xl mx-auto px-6 py-10">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="border-t border-line mt-8">
+  <div class="max-w-6xl mx-auto px-6 py-5 flex flex-wrap gap-x-6 gap-y-1 justify-between font-mono text-[10.5px] tracking-[0.08em] uppercase text-ink-soft">
+    <span>LexAR · Procesamiento de Lenguaje Natural · UdeSA</span>
+    <span>Corpus Infoleg + SAIJ · No constituye asesoramiento legal</span>
+  </div>
+</footer>
+
+</body>
+</html>
