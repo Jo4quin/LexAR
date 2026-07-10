@@ -57,12 +57,43 @@ def _buscar(q: str) -> list[dict]:
     ]
 
 
+def _buscar_semantica(q: str, top_docs: int = 20) -> list[dict]:
+    """Busqueda por tema: embebe la consulta (1 llamada a Vertex) y busca en el FAISS de leyes.
+    Mismos campos que _buscar() + score y snippet del mejor fragmento."""
+    from lexar.embeddings import embed_texts
+    from lexar.retrieval import aggregate_hits_by_document
+
+    law = state.get_law_index()
+    hits = law.search(embed_texts([q.strip()]), top_k=40)
+    docs = aggregate_hits_by_document(hits, "document_id").head(top_docs)
+    return [
+        {
+            "document_id": row["document_id"],
+            "titulo": fix_display_text(str(row["titulo_resumido"])),
+            "tipo": row["tipo_norma"],
+            "fecha": row["fecha_sancion"] or "s/d",
+            "score": f"{row['score']:.3f}",
+            "snippet": fix_display_text(str(row["text"])[:220]),
+        }
+        for _, row in docs.iterrows()
+    ]
+
+
 @router.get("/explorador", response_class=HTMLResponse)
-def explorador(request: Request, q: str = ""):
-    """Pagina de busqueda. El input HTMX pega a esta misma ruta (asi hx-push-url deja una URL
-    compartible /explorador?q=...): si el request viene de HTMX se devuelve solo el partial de
-    resultados; si es una carga completa (o un link compartido con ?q=), la pagina entera."""
-    contexto = {"q": q, "resultados": _buscar(q) if q.strip() else None}
+def explorador(request: Request, q: str = "", modo: str = "titulo"):
+    """Pagina de busqueda. El form HTMX pega a esta misma ruta (asi hx-push-url deja una URL
+    compartible /explorador?q=...&modo=...): si el request viene de HTMX se devuelve solo el
+    partial de resultados; si es una carga completa (o un link compartido), la pagina entera."""
+    contexto = {"q": q, "modo": modo, "resultados": None}
+    if q.strip():
+        if modo == "tema":
+            try:
+                contexto["resultados"] = _buscar_semantica(q)
+            except Exception as exc:
+                contexto["error"] = f"No se pudo hacer la búsqueda semántica: {exc}"
+                contexto["resultados"] = []
+        else:
+            contexto["resultados"] = _buscar(q)
     if request.headers.get("hx-request"):
         return templates.TemplateResponse(request, "partials/resultados_busqueda.html", contexto)
     return templates.TemplateResponse(request, "explorador.html", contexto)
@@ -142,6 +173,75 @@ def norma(request: Request, document_id: str):
         "n_vinculos": len(links),
         "fallos": _fallos_para_template(document_id),
     })
+
+
+GRAFO_MAX_VECINOS = 20
+# Colores de arista por etiqueta dominante (tokens de base.html). El resto de etiquetas
+# (neutral, different_scope, needs_review) cae al gris de linea.
+GRAFO_EDGE_COLORS = {
+    "possible_conflict": "#A93D32",
+    "possible_modification": "#4A3C8C",
+    "possible_overlap": "#A99BE3",
+}
+
+
+def _grafo_edge(desde: str, hasta: str, source: str, label: str, sim: float) -> dict:
+    width = 1.2
+    if pd.notna(sim):
+        width = 1 + max(0.0, min(1.0, (float(sim) - 0.95) / 0.05)) * 3
+    etiqueta = DOMINANT_LABEL.get(label, (label or "—", ""))[0]
+    return {
+        "from": desde,
+        "to": hasta,
+        "dashes": source == "semantic",
+        "color": {"color": GRAFO_EDGE_COLORS.get(label, "#C9C4B8"), "opacity": 0.85},
+        "width": round(width, 2),
+        "title": f"{etiqueta} · {LINK_SOURCE_LABEL.get(source, source)}",
+    }
+
+
+@router.get("/explorador/norma/{document_id}/grafo.json")
+def grafo_json(document_id: str):
+    """Datos para vis-network: la norma central, sus top vecinos y — clave para que se vea un
+    cluster real y no una estrella — los vinculos entre los propios vecinos."""
+    norm_links = state.get_norm_links()
+    links = links_for_document(norm_links, document_id)
+    vecinos = links.sort_values("max_similarity", ascending=False, na_position="last").head(GRAFO_MAX_VECINOS)
+    titles = state.get_titles()
+    node_ids = {document_id, *vecinos["other_document_id"]}
+
+    def _label(doc_id: str) -> str:
+        titulo = fix_display_text(str(titles.get(doc_id, doc_id)))
+        return titulo[:32] + ("…" if len(titulo) > 32 else "")
+
+    nodes = [{
+        "id": document_id, "label": _label(document_id), "size": 26,
+        "color": {"background": "#4A3C8C", "border": "#372D6E"},
+        "title": f"{fix_display_text(str(titles.get(document_id, document_id)))} ({document_id})",
+    }]
+    edges = []
+    for _, r in vecinos.iterrows():
+        other = r["other_document_id"]
+        nodes.append({
+            "id": other, "label": _label(other), "size": 14,
+            "color": {"background": "#EDEAF7", "border": "#A99BE3"},
+            "title": f"{fix_display_text(str(titles.get(other, other)))} ({other})",
+        })
+        edges.append(_grafo_edge(document_id, other, r["link_source"], r.get("dominant_label"), r.get("max_similarity")))
+
+    entre_vecinos = norm_links[
+        norm_links["document_id_a"].isin(node_ids)
+        & norm_links["document_id_b"].isin(node_ids)
+        & (norm_links["document_id_a"] != document_id)
+        & (norm_links["document_id_b"] != document_id)
+    ]
+    for _, r in entre_vecinos.iterrows():
+        edges.append(_grafo_edge(
+            r["document_id_a"], r["document_id_b"], r["link_source"],
+            r.get("dominant_label"), r.get("max_similarity"),
+        ))
+
+    return {"nodes": nodes, "edges": edges}
 
 
 @router.post("/explorador/norma/{document_id}/resumen", response_class=HTMLResponse)

@@ -82,6 +82,71 @@
   {% endif %}
 </section>
 
+{% if vinculos %}
+<section class="mt-10">
+  <h2 class="font-display text-xl mb-1">Mapa de vínculos</h2>
+  <p class="text-sm text-ink-soft mb-4">
+    El vecindario normativo de esta norma como grafo interactivo — incluye también los vínculos
+    entre las normas vecinas, así los clusters (regímenes que se modifican entre sí) se ven a
+    simple vista. Click en un nodo abre esa norma.
+  </p>
+  <button id="btn-grafo"
+          class="font-mono text-[11px] tracking-[0.12em] uppercase text-tinta border border-tinta/40 rounded-sm px-3 py-1.5 hover:bg-tinta hover:text-white transition-colors disabled:opacity-40 cursor-pointer">
+    Ver mapa
+  </button>
+  <div id="grafo-wrap" class="hidden">
+    <div id="grafo" class="h-[440px] bg-surface border border-line rounded-sm"></div>
+    <div class="flex flex-wrap gap-x-5 gap-y-1 mt-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-soft">
+      <span class="flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-ink-soft"></span> oficial</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-dashed border-ink-soft"></span> semántico</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#A93D32"></span> conflicto</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#4A3C8C"></span> modificación</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#A99BE3"></span> superposición</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#C9C4B8"></span> otras</span>
+    </div>
+  </div>
+</section>
+<script>
+  document.getElementById("btn-grafo").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-grafo");
+    btn.disabled = true;
+    btn.textContent = "Cargando mapa…";
+    try {
+      if (!window.vis) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdn.jsdelivr.net/npm/vis-network@9.1.9/dist/vis-network.min.js";
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const data = await (await fetch("/explorador/norma/{{ doc.document_id }}/grafo.json")).json();
+      btn.classList.add("hidden");
+      document.getElementById("grafo-wrap").classList.remove("hidden");
+      const red = new vis.Network(
+        document.getElementById("grafo"),
+        { nodes: new vis.DataSet(data.nodes), edges: new vis.DataSet(data.edges) },
+        {
+          nodes: { shape: "dot", borderWidth: 1.5, font: { face: "Archivo", size: 12, color: "#211F1B" } },
+          edges: { smooth: false },
+          physics: { barnesHut: { gravitationalConstant: -3500, springLength: 140 }, stabilization: { iterations: 120 } },
+          interaction: { hover: true },
+        }
+      );
+      red.on("click", (params) => {
+        if (params.nodes.length && params.nodes[0] !== "{{ doc.document_id }}") {
+          window.location.href = "/explorador/norma/" + params.nodes[0];
+        }
+      });
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "Reintentar mapa";
+    }
+  });
+</script>
+{% endif %}
+
 <section class="mt-10">
   <h2 class="font-display text-xl mb-1">Fallos CSJN relacionados</h2>
   <p class="text-sm text-ink-soft mb-4">Sentencias de la Corte Suprema publicadas en SAIJ desde 2020, vinculadas por similitud semántica.</p>

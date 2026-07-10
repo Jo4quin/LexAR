@@ -17,7 +17,9 @@ from lexar.links import load_norm_links
 from lexar.retrieval import CorpusIndex, load_case_index, load_law_index
 from lexar.summaries import LinkSummarizer
 
-_lock = threading.Lock()
+# RLock, no Lock: algunos loaders llaman a otros getters (get_titles -> get_documents) y un
+# lock no reentrante deadlockea cuando el recurso interno todavia no esta cacheado.
+_lock = threading.RLock()
 _cache: dict[str, object] = {}
 
 
@@ -89,3 +91,44 @@ def get_case_index() -> CorpusIndex | None:
 
 def get_summarizer() -> LinkSummarizer:
     return _get("summarizer", LinkSummarizer)
+
+
+def _load_conflictos() -> pd.DataFrame:
+    """Los 84 pares possible_conflict de la Fase 3, con el texto de ambos fragmentos.
+    Los textos se leen con un filtro isin sobre pyarrow.dataset — NUNCA cargar la columna
+    `text` completa de embedding_fragments (regla de memoria del CLAUDE.md)."""
+    import pyarrow.dataset as ds
+
+    cls = pd.read_parquet(
+        config.CLASSIFICATIONS_PATH,
+        columns=[
+            "fragment_a_id", "fragment_b_id", "document_a_id", "document_b_id",
+            "similarity_score", "final_label", "final_confidence", "final_explanation",
+        ],
+    )
+    conflictos = cls[cls["final_label"] == "possible_conflict"].copy()
+    frag_ids = list(set(conflictos["fragment_a_id"]) | set(conflictos["fragment_b_id"]))
+    dataset = ds.dataset(config.EMBEDDING_FRAGMENTS_PATH)
+    tabla = dataset.to_table(
+        columns=["fragment_id", "text"], filter=ds.field("fragment_id").isin(frag_ids)
+    )
+    textos = dict(zip(tabla.column("fragment_id").to_pylist(), tabla.column("text").to_pylist()))
+    conflictos["text_a"] = conflictos["fragment_a_id"].map(textos)
+    conflictos["text_b"] = conflictos["fragment_b_id"].map(textos)
+    return conflictos.sort_values("final_confidence", ascending=False)
+
+
+def get_conflictos() -> pd.DataFrame:
+    return _get("conflictos", _load_conflictos)
+
+
+def append_feedback(row: dict) -> None:
+    """Feedback 👍/👎 del chatbot: leer-concatenar-escribir bajo el lock global (mismo patron
+    que el cache de LinkSummarizer). Volumen esperado: decenas de filas."""
+    with _lock:
+        if config.FEEDBACK_PATH.exists():
+            df = pd.concat([pd.read_parquet(config.FEEDBACK_PATH), pd.DataFrame([row])], ignore_index=True)
+        else:
+            df = pd.DataFrame([row])
+        config.FEEDBACK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(config.FEEDBACK_PATH, index=False)
