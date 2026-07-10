@@ -36,12 +36,14 @@ pivot y no se usaban en las Fases 1-3.
 python -m uvicorn app.main:app
 ```
 
-Abrí `http://127.0.0.1:8000` en el navegador.
+Abrí `http://127.0.0.1:8000` en el navegador. Si el puerto 8000 está ocupado, agregá
+`--port 8080` (o el que quieras) y ajustá la URL.
 
 **Primer uso**: la primera vez que entrás a cada sección (Explorador, Chatbot), el servidor carga y
-cachea los archivos parquet grandes y el índice FAISS — puede tardar varios segundos (la primera
-consulta al chatbot es la más lenta). Las veces siguientes es instantáneo mientras el servidor siga
-corriendo.
+cachea los archivos parquet grandes y el índice FAISS — puede tardar varios segundos. La más lenta
+es la **primera consulta al chatbot** (~40-60 segundos: construye el índice de 112k fragmentos y
+recién después llama al modelo); las siguientes tardan solo lo que tardan las llamadas al LLM. La
+terminal donde lanzaste `uvicorn` muestra el log de cada request, útil si algo no responde.
 
 ## 4. Home — estado de los datos
 
