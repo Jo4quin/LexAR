@@ -37,6 +37,54 @@
   corpus acotado. No constituye asesoramiento legal.
 </div>
 
+<section class="mt-12">
+  <h2 class="font-display text-xl mb-1">Cómo está hecho — el pipeline</h2>
+  <p class="text-sm text-ink-soft mb-4 max-w-3xl">De datos crudos de Infoleg/SAIJ a un asistente con
+    recuperación semántica, clasificación de relaciones y jurisprudencia enlazada. Cada fase alimenta a la siguiente.</p>
+  <div class="overflow-x-auto pb-2">
+    <div class="flex items-stretch gap-2 min-w-max">
+      {% for f in [
+        ("Fase 1", "Consolidación", "9.518 textos unificados y deduplicados; segmentación por artículo."),
+        ("Fase 2", "Embeddings + Retrieval", "113.895 fragmentos → embeddings 768d; índice FAISS; 679.720 pares candidatos."),
+        ("Fase 3", "Clasificación", "Reglas + LLM en cascada etiquetan cada par (modificación, superposición, conflicto…)."),
+        ("Fase 4", "Jurisprudencia CSJN", "1.234 fallos de la Corte (2020+) desde SAIJ; 28.930 vínculos ley↔fallo."),
+        ("Fase 5", "Vínculos + Resúmenes", "48.276 vínculos entre normas; resúmenes «Explicar IA» on-demand."),
+        ("Fase 6", "Chatbot RAG", "Caso coloquial → reescritura → retrieval → respuesta citada y verificada."),
+        ("Fase 8", "Evaluación", "Precisión/recall del retrieval y trazabilidad de citas (96,3 %).")
+      ] %}
+      <div class="flex items-center">
+        <div class="w-44 shrink-0 bg-surface border border-line rounded-sm p-3 hover:border-tinta transition-colors">
+          <p class="font-mono text-[10px] tracking-[0.14em] uppercase text-tinta mb-1">{{ f[0] }}</p>
+          <p class="font-display text-[0.98rem] leading-tight mb-1.5">{{ f[1] }}</p>
+          <p class="text-[11px] text-ink-soft leading-snug">{{ f[2] }}</p>
+        </div>
+        {% if not loop.last %}<span class="text-tinta px-1 self-center text-lg">→</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="mt-11">
+  <h2 class="font-display text-xl mb-1">Modelos de IA usados</h2>
+  <p class="text-sm text-ink-soft mb-4 max-w-3xl">Familia Gemini vía Vertex AI, elegidos por tarea:
+    modelos rápidos y económicos para el trabajo masivo, y los más capaces donde la calidad se ve.</p>
+  <div class="bg-surface border border-line rounded-sm overflow-x-auto">
+    <table class="tabla">
+      <thead><tr><th>Tarea</th><th>Modelo</th><th>Para qué</th></tr></thead>
+      <tbody>
+        {% for tarea, modelo, para in modelos %}
+        <tr>
+          <td class="whitespace-nowrap">{{ tarea }}</td>
+          <td class="font-mono text-xs text-tinta whitespace-nowrap">{{ modelo }}</td>
+          <td class="text-sm text-ink-soft">{{ para }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <section class="mt-11">
   <h2 class="font-display text-xl mb-1">Estado de los datos</h2>
   <p class="text-sm text-ink-soft mb-4">Artefactos generados por el pipeline (Fases 2–5). Si algo figura «falta», correr el notebook de esa fase.</p>

@@ -34,7 +34,7 @@
           {% for l in leyes %}
           <tr>
             <td class="font-mono text-xs whitespace-nowrap"><a href="/explorador/norma/{{ l.document_id }}" class="text-tinta hover:underline">{{ l.document_id }}</a></td>
-            <td>{{ l.titulo_resumido|fix }}</td>
+            <td>{{ l.titulo }}{% if l.estado %} <span class="badge badge-rojo" title="{{ l.detalle }}">{{ l.estado }}</span>{% endif %}</td>
             <td class="text-xs">{{ l.tipo_norma }}</td>
             <td class="font-mono text-xs">{{ l.fecha_sancion }}</td>
             <td class="font-mono text-xs text-right">{{ "%.3f"|format(l.score) }}</td>
@@ -54,7 +54,9 @@
         <tbody>
           {% for f in fallos %}
           <tr>
-            <td class="font-mono text-xs whitespace-nowrap">{{ f.case_id }}</td>
+            <td class="font-mono text-xs whitespace-nowrap">
+              {% if f.url %}<a href="{{ f.url }}" target="_blank" rel="noopener" class="text-tinta hover:underline">{{ f.case_id }} ↗</a>{% else %}{{ f.case_id }}{% endif %}
+            </td>
             <td class="font-mono text-xs whitespace-nowrap">{{ f.fecha }}</td>
             <td>{{ f.actor|fix }}</td>
             <td>{{ f.demandado|fix }}</td>
