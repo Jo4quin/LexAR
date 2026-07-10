@@ -387,10 +387,10 @@ citation checkmarks.
 8,702 case fragments). Reference example ("me chocaron el auto y el otro conductor no tiene seguro"):
 rewrote to 2 legal-language queries, retrieved 6 relevant laws and 4 CSJN fallos, generated a cited
 answer with 8/10 valid citations. Across the full 17-case eval set (Fase 8): 143 citations total, 93.7%
-traceable. Minor known refinement opportunity, not fixed: the model occasionally emits multiple
-fragment IDs inside one citation bracket (e.g. `[cfrag:X, cfrag:Y]`), which the current validation
-logic treats as a single (invalid) source id instead of splitting it — likely responsible for some of
-the ~6% untraceable citations.
+traceable. The multi-id-bracket refinement noted here was **fixed on 2026-07-10**
+(`validate_citations()` now splits `[cfrag:X, cfrag:Y]` into individual ids); re-running the 17-case
+traceability measurement gave **96.3% (157/163)** — saved to
+`outputs/eval/citation_traceability_v2.csv`.
 
 ### Fase 7 — Web app (`app/`) — DONE (click-through-verified)
 
@@ -406,12 +406,26 @@ import time, same walk-up pattern the notebooks use.
   loads avoid concurrent RAM spikes on this low-memory machine). Nothing loads at startup; Home
   renders without touching FAISS. Heavy endpoints are sync `def`, so FastAPI runs them in its
   threadpool and the server stays responsive during LLM calls.
-- **HTMX conventions**: the search input GETs `/explorador` with `hx-push-url` — the route returns
+- **HTMX conventions**: the search form GETs `/explorador` with `hx-push-url` — the route returns
   the results partial when the `HX-Request` header is present, the full page otherwise (shareable
-  URLs: `/explorador?q=...`, `/explorador/norma/infoleg:638` — this replaced the old Streamlit
-  session_state persistence hack). Per-row "Explicar IA" buttons POST to `.../resumen` targeting a
-  shared panel; the chatbot form appends partials to the DOM (history is DOM-only — `answer_case()`
-  is stateless, matching the Streamlit behavior). LLM errors return an error partial, not a 500.
+  URLs: `/explorador?q=...&modo=...`, `/explorador/norma/infoleg:638` — this replaced the old
+  Streamlit session_state persistence hack). Per-row "Explicar IA" buttons POST to `.../resumen`
+  targeting a panel. LLM errors return an error partial, not a 500.
+- **Feature round 2 (2026-07-10, same session)**: semantic search (`modo=tema` embeds the query
+  and searches the law FAISS index — Enter/button-triggered, never per-keystroke), `/hallazgos`
+  (the 84 verified `possible_conflict` pairs, texts fetched via `pyarrow.dataset` `isin` filter,
+  grouped by doc pair), an interactive **vis-network graph** on the norma page
+  (`/explorador/norma/{id}/grafo.json`: center + top-20 neighbors + neighbor↔neighbor edges;
+  lib loaded on demand on button click), and a chatbot upgrade: multi-turn (client-side JS
+  `window.historial` posted as JSON, parsed defensively), live progress (POST enqueues a
+  `threading.Thread` job in an in-memory dict, a progress bubble polls
+  `/chatbot/estado/{job_id}` every 1s, final answer returns **HTTP 286** which stops htmx
+  polling), clickable citations (`_linkify()` in `app/routes/chatbot.py` using the `fuentes`
+  metadata `answer_case()` now returns), and 👍/👎 feedback appended to
+  `outputs/feedback_chatbot.parquet` (`state.append_feedback()`).
+  Core changes in `src/lexar/chatbot.py`: `validate_citations()` now splits multi-id brackets
+  (`[cfrag:X, cfrag:Y]` — the known ~6% traceability bug), `answer_case()` gained
+  `history`/`on_stage` params and a `fuentes` key in its return dict; all backwards-compatible.
 - **Design system** ("tinta y foja") lives entirely in `app/templates/base.html` as Tailwind v4
   `@theme` tokens + small component classes (`.sello`, `.badge`, `.tabla`, `.prosa`). Fonts: Libre
   Caslon Text (display), Archivo (UI), Chivo Mono (data) — the latter two by Omnibus-Type (Buenos
