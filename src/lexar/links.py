@@ -161,14 +161,17 @@ def links_for_document(norm_links: pd.DataFrame, document_id: str) -> pd.DataFra
     is_a = links["document_id_a"] == document_id
     links["other_document_id"] = np.where(is_a, links["document_id_b"], links["document_id_a"])
     direction = links["official_direction"].fillna("")
+    # El caso sin direccion oficial (vinculo solo semantico) va primero: si no, la condicion
+    # `(direction == "a_modifies_b") == is_a` matchea con direction == "" cuando is_a es False
+    # y etiqueta vinculos semanticos como "esta norma modifica a la vinculada".
     links["direccion_oficial"] = np.select(
         [
+            direction == "",
             direction == "mutual",
             (direction == "a_modifies_b") == is_a,
-            direction != "",
         ],
-        ["se modifican mutuamente", "esta norma modifica a la vinculada", "la vinculada modifica a esta norma"],
-        default="",
+        ["", "se modifican mutuamente", "esta norma modifica a la vinculada"],
+        default="la vinculada modifica a esta norma",
     )
     return links.sort_values(["link_source", "max_similarity"], ascending=[True, False])
 
