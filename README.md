@@ -350,18 +350,23 @@ Resultado: verificado end-to-end contra ambos indices FAISS (leyes + fallos). So
 prueba: **143 citas** generadas, **93,7% trazables** (verificadas textualmente contra la fuente
 citada). Detalle tecnico en `src/lexar/chatbot.py`.
 
-### Fase 7: App Streamlit — completa
+### Fase 7: App web (FastAPI + HTMX + Tailwind) — completa
 
-- **Explorador** (`app/pages/1_Explorador.py`): busqueda de norma, ficha con advertencia de vigencia,
-  tabla de normas vinculadas con boton "Explicar relacion" (resumen IA on-demand), fallos CSJN
-  relacionados.
-- **Chatbot** (`app/pages/2_Chatbot.py`): interfaz de chat sobre el pipeline de la Fase 6, con citas
-  expandibles y verificacion visible.
-- **Home** (`app/Home.py`): estado de los datos generados por cada fase.
+Originalmente construida en Streamlit; reconstruida el 2026-07-10 como app FastAPI con templates
+Jinja2, HTMX para la interactividad y Tailwind CSS (CDN v4), con identidad visual propia.
 
-Correr con `streamlit run app/Home.py` desde la raiz del repo. Verificado (2026-07-09): las 3 paginas
-arrancan sin errores (HTTP 200, sin traceback en el log del servidor) — verificacion a nivel de
-arranque; falta una pasada manual de interaccion en navegador.
+- **Explorador** (`app/routes/explorador.py`): busqueda con resultados en vivo y URL compartible
+  (`/explorador?q=...`), ficha de norma con URL propia (`/explorador/norma/infoleg:638`),
+  advertencia de vigencia, tabla de normas vinculadas con boton "Explicar IA" por fila (resumen
+  on-demand con cache) y fallos CSJN relacionados.
+- **Chatbot** (`app/routes/chatbot.py`): interfaz de chat sobre el pipeline de la Fase 6, con citas
+  expandibles y sello de verificacion por cita.
+- **Home** (`app/routes/home.py`): estado de los datos generados por cada fase.
+
+Correr con `python -m uvicorn app.main:app` desde la raiz del repo (por defecto en
+`http://127.0.0.1:8000`). Verificado (2026-07-10) con click-through completo en navegador: busqueda,
+ficha de la Ley 24.240 (advertencia de vigencia + 20 vinculos), resumen IA desde cache, y consulta
+al chatbot con citas verificadas.
 
 ### Fase 8: Evaluacion e informe — completa
 
@@ -383,7 +388,7 @@ manual del equipo. Detalle tecnico en `notebooks/Evaluacion_Producto.ipynb`.
 - Indices de embeddings (leyes y jurisprudencia).
 - Grafo de vinculos entre normas, con resumenes generados por IA.
 - Chatbot juridico con citas verificadas.
-- App Streamlit (explorador + chatbot).
+- App web FastAPI + HTMX (explorador + chatbot).
 - Metricas de evaluacion (precision/recall de retrieval, trazabilidad de citas).
 - Informe academico-tecnico.
 

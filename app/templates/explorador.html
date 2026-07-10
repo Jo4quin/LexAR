@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Explorador — LexAR{% endblock %}
+{% block content %}
+
+<p class="font-mono text-[11px] tracking-[0.18em] uppercase text-tinta mb-2">Explorador · 30.061 normas nacionales</p>
+<h1 class="font-display text-3xl mb-6">Buscar una norma</h1>
+
+<div class="relative">
+  <input type="search" name="q" value="{{ q }}"
+         placeholder="Título o id — defensa del consumidor, alquileres, infoleg:638…"
+         hx-get="/explorador" hx-trigger="input changed delay:300ms, search" hx-target="#resultados"
+         hx-push-url="true" hx-indicator="#buscando"
+         autofocus autocomplete="off" aria-label="Buscar norma por título o id"
+         class="w-full bg-surface border border-line rounded-sm px-4 py-3.5 text-[1rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none">
+  <div id="buscando" class="htmx-indicator absolute right-4 top-1/2 -translate-y-1/2">
+    <span class="puntos"><span></span><span></span><span></span></span>
+  </div>
+</div>
+
+<div id="resultados" class="mt-6">
+  {% include "partials/resultados_busqueda.html" %}
+</div>
+
+{% endblock %}

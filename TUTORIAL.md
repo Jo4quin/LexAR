@@ -27,21 +27,21 @@ Desde la raíz del repo:
 pip install -r requirements.txt
 ```
 
-Esto instala, entre otras cosas, `streamlit`, `ftfy` y `pypdf`, que son específicas del pivot y no
-se usaban en las Fases 1-3.
+Esto instala, entre otras cosas, `fastapi`, `uvicorn`, `ftfy` y `pypdf`, que son específicas del
+pivot y no se usaban en las Fases 1-3.
 
 ## 3. Arrancar la app
 
 ```bash
-streamlit run app/Home.py
+python -m uvicorn app.main:app
 ```
 
-Se abre solo en el navegador (por defecto en `http://localhost:8501`). Si no se abre solo, andá
-manualmente a esa URL.
+Abrí `http://127.0.0.1:8000` en el navegador.
 
-**Primer arranque**: la primera vez que entrás a cada página (Home, Explorador, Chatbot), Streamlit
-carga y cachea los archivos parquet grandes y el índice FAISS — puede tardar varios segundos. Las
-veces siguientes es instantáneo mientras el servidor siga corriendo (`@st.cache_resource`).
+**Primer uso**: la primera vez que entrás a cada sección (Explorador, Chatbot), el servidor carga y
+cachea los archivos parquet grandes y el índice FAISS — puede tardar varios segundos (la primera
+consulta al chatbot es la más lenta). Las veces siguientes es instantáneo mientras el servidor siga
+corriendo.
 
 ## 4. Home — estado de los datos
 
@@ -52,10 +52,12 @@ falta algo, aparece marcado y te dice de qué fase viene.
 
 ## 5. Explorador — buscar una ley y ver sus vínculos
 
-1. Andá a **Explorador** en el menú de la izquierda.
+1. Andá a **Explorador** en la barra de navegación superior.
 2. Escribí parte del título o el id de una norma en el buscador (ej. `defensa del consumidor`,
-   `24.240`, o directamente `infoleg:638`).
-3. Elegí el resultado correcto del desplegable si hay más de uno.
+   `24.240`, o directamente `infoleg:638`) — los resultados aparecen a medida que escribís, y la
+   URL queda compartible (`/explorador?q=...`).
+3. Hacé clic en el resultado correcto. Cada norma tiene su propia URL
+   (`/explorador/norma/infoleg:638`), así que podés compartirla o guardarla como favorito.
 4. Vas a ver:
    - **Ficha de la norma**: tipo, fecha de sanción, boletín, id.
    - **Advertencia de vigencia**, si corresponde: cuántas modificaciones posteriores tiene
@@ -65,18 +67,17 @@ falta algo, aparece marcado y te dice de qué fase viene.
    - **Tabla de normas vinculadas**, con:
      - `vínculo`: si la relación es oficial (del grafo de modificaciones de Infoleg), semántica
        (por similitud de contenido) o ambas.
-     - `relación (Fase 3)`: la etiqueta que le puso el clasificador (posible modificación,
-       solapamiento, alcance distinto, etc.).
-     - `similitud`: qué tan parecido es el contenido, cuando aplica.
+     - `relación`: la etiqueta que le puso el clasificador de la Fase 3 (modificación,
+       superposición, alcance distinto, etc.).
+     - `simil.`: qué tan parecido es el contenido, cuando aplica.
    - **Fallos CSJN relacionados** (2020 en adelante), con carátula, fecha y link directo a SAIJ.
-5. Para pedir una explicación en lenguaje natural de por qué dos normas están vinculadas: elegí el
-   vínculo en el desplegable "Elegí un vínculo para explicarlo con IA" y apretá **"Explicar relación
-   (IA)"**. La primera vez que pedís ese par específico, llama al modelo (tarda unos segundos); si
-   ya lo habías pedido antes, sale al instante desde el caché.
+5. Para pedir una explicación en lenguaje natural de por qué dos normas están vinculadas: apretá
+   **"Explicar IA"** en la fila de ese vínculo. La primera vez que pedís ese par específico, llama
+   al modelo (tarda unos segundos); si ya lo habías pedido antes, sale al instante desde el caché.
 
 ## 6. Chatbot — plantear un caso en lenguaje natural
 
-1. Andá a **Chatbot** en el menú de la izquierda.
+1. Andá a **Chatbot** en la barra de navegación superior.
 2. Escribí un caso como se lo contarías a un colega — no hace falta usar lenguaje jurídico. Ejemplos
    que funcionan bien:
    - *"Me chocaron el auto y el otro conductor no tiene seguro, qué puedo reclamar"*
@@ -88,9 +89,10 @@ falta algo, aparece marcado y te dice de qué fase viene.
 4. La respuesta viene en markdown, organizada por tema, con cada afirmación normativa citando su
    fuente entre corchetes (`[frag:...]` para leyes, `[cfrag:...]` para fallos).
 5. Debajo de la respuesta hay tres desplegables:
-   - **Citas textuales**: cada cita con un ✅ o ❌ según se haya verificado automáticamente que es
-     texto literal de la fuente citada — así podés confiar (o desconfiar puntualmente) en cada
-     afirmación sin tener que ir a buscar el texto original vos mismo.
+   - **Citas textuales**: cada cita con un sello **VERIFICADA** o **NO VERIFICADA** según se haya
+     comprobado automáticamente que es texto literal de la fuente citada — así podés confiar (o
+     desconfiar puntualmente) en cada afirmación sin tener que ir a buscar el texto original vos
+     mismo.
    - **Leyes recuperadas**: la lista completa de normas que encontró el buscador, con su similitud.
    - **Fallos CSJN recuperados**: idem para jurisprudencia.
 6. Al pie, un recordatorio fijo: esto es asistencia a la investigación jurídica sobre un corpus
