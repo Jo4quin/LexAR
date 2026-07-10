@@ -355,12 +355,22 @@ citada). Detalle tecnico en `src/lexar/chatbot.py`.
 Originalmente construida en Streamlit; reconstruida el 2026-07-10 como app FastAPI con templates
 Jinja2, HTMX para la interactividad y Tailwind CSS (CDN v4), con identidad visual propia.
 
-- **Explorador** (`app/routes/explorador.py`): busqueda con resultados en vivo y URL compartible
-  (`/explorador?q=...`), ficha de norma con URL propia (`/explorador/norma/infoleg:638`),
-  advertencia de vigencia, tabla de normas vinculadas con boton "Explicar IA" por fila (resumen
-  on-demand con cache) y fallos CSJN relacionados.
-- **Chatbot** (`app/routes/chatbot.py`): interfaz de chat sobre el pipeline de la Fase 6, con citas
-  expandibles y sello de verificacion por cita.
+- **Explorador** (`app/routes/explorador.py`): busqueda por titulo (en vivo) o **por tema**
+  (semantica, sobre el indice FAISS de la Fase 2, con score y snippet por resultado), URL
+  compartible (`/explorador?q=...&modo=...`), ficha de norma con URL propia
+  (`/explorador/norma/infoleg:638`), advertencia de vigencia, tabla de normas vinculadas con
+  boton "Explicar IA" por fila (resumen on-demand con cache), **mapa de vinculos** (grafo
+  interactivo del vecindario normativo, con vinculos entre vecinos, via vis-network) y fallos
+  CSJN relacionados.
+- **Hallazgos** (`app/routes/hallazgos.py`): los 84 pares *possible_conflict* confirmados por la
+  verificacion de la Fase 3, agrupados por par de normas, con explicacion del verificador,
+  ambos fragmentos y boton "Explicar IA" — la conexion visible del producto con la mision
+  original del proyecto.
+- **Chatbot** (`app/routes/chatbot.py`): chat **multi-turno** (las repreguntas se entienden en
+  contexto) sobre el pipeline de la Fase 6, con **progreso en vivo por etapa** (reescritura →
+  busqueda → redaccion, via polling HTMX), **citas clickeables** (frag → ficha de la norma,
+  cfrag → fallo en SAIJ), sello de verificacion por cita y **feedback 👍/👎** persistido en
+  `outputs/feedback_chatbot.parquet`.
 - **Home** (`app/routes/home.py`): estado de los datos generados por cada fase.
 
 Correr con `python -m uvicorn app.main:app` desde la raiz del repo (por defecto en
@@ -378,7 +388,9 @@ al chatbot con citas verificadas.
 Resultado (2026-07-09), sobre los 17 casos de `eval/casos_prueba.csv`: **Recall@10 73,5%** con query
 rewriting vs. **70,6%** sin — la mejora que justifica la decision de diseño. Precision@10 practicamente
 plana (10,0% vs. 9,4%), esperable dado que cada caso tiene solo 1-2 leyes esperadas frente a 10
-posiciones evaluadas. Trazabilidad de citas: **93,7%** (134/143). La rubrica humana de resumenes de
+posiciones evaluadas. Trazabilidad de citas: **93,7%** (134/143) en la corrida original;
+**re-medida el 2026-07-10 tras corregir el parseo de citas con multiples ids en un corchete:
+96,3% (157/163)** (`outputs/eval/citation_traceability_v2.csv`). La rubrica humana de resumenes de
 vinculos (`outputs/eval/rubrica_resumenes.csv`) quedo generada pero sin completar — requiere revision
 manual del equipo. Detalle tecnico en `notebooks/Evaluacion_Producto.ipynb`.
 

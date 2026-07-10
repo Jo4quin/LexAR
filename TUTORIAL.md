@@ -55,9 +55,16 @@ falta algo, aparece marcado y te dice de qué fase viene.
 ## 5. Explorador — buscar una ley y ver sus vínculos
 
 1. Andá a **Explorador** en la barra de navegación superior.
-2. Escribí parte del título o el id de una norma en el buscador (ej. `defensa del consumidor`,
-   `24.240`, o directamente `infoleg:638`) — los resultados aparecen a medida que escribís, y la
-   URL queda compartible (`/explorador?q=...`).
+2. Elegí el modo de búsqueda:
+   - **Por título** (default): escribí parte del título o el id de una norma (ej. `defensa del
+     consumidor`, `24.240`, o directamente `infoleg:638`) — los resultados aparecen a medida que
+     escribís.
+   - **Por tema (semántica)**: escribí un tema o situación («protección de datos personales»,
+     «contratos de alquiler») y apretá Enter o **Buscar** — encuentra normas por contenido aunque
+     el título no coincida, usando el índice de embeddings del proyecto. Cada resultado muestra
+     su score de similitud y un fragmento del texto que matcheó. La primera búsqueda por tema
+     carga el índice (~30-60 s); las siguientes son casi instantáneas.
+   En ambos modos la URL queda compartible (`/explorador?q=...&modo=...`).
 3. Hacé clic en el resultado correcto. Cada norma tiene su propia URL
    (`/explorador/norma/infoleg:638`), así que podés compartirla o guardarla como favorito.
 4. Vas a ver:
@@ -76,6 +83,20 @@ falta algo, aparece marcado y te dice de qué fase viene.
 5. Para pedir una explicación en lenguaje natural de por qué dos normas están vinculadas: apretá
    **"Explicar IA"** en la fila de ese vínculo. La primera vez que pedís ese par específico, llama
    al modelo (tarda unos segundos); si ya lo habías pedido antes, sale al instante desde el caché.
+6. **Mapa de vínculos**: el botón "Ver mapa" dibuja el vecindario de la norma como un grafo
+   interactivo — la norma al centro, sus vecinas alrededor, y también los vínculos *entre* las
+   vecinas (así los clusters de normas que se modifican entre sí se ven a simple vista). Línea
+   sólida = vínculo oficial, punteada = semántico; el color codifica la relación (rojo =
+   conflicto, violeta = modificación). Click en cualquier nodo abre esa norma.
+
+## 5 bis. Hallazgos — posibles conflictos normativos
+
+La sección **Hallazgos** muestra el resultado estrella del análisis de las Fases 1-3: los 84
+pares de fragmentos que el clasificador de dos niveles confirmó como *posible conflicto* (sobre
+679.720 pares analizados). Cada card muestra las dos normas (con link a sus fichas), la
+explicación del modelo verificador, la similitud y confianza, y los dos fragmentos enfrentados.
+El botón "Explicar IA" genera un resumen más elaborado del vínculo (mismo caché que el
+Explorador). Ojo: «posible conflicto» es una señal para revisión profesional, no un dictamen.
 
 ## 6. Chatbot — plantear un caso en lenguaje natural
 
@@ -85,20 +106,27 @@ falta algo, aparece marcado y te dice de qué fase viene.
    - *"Me chocaron el auto y el otro conductor no tiene seguro, qué puedo reclamar"*
    - *"Compré una heladera que vino fallada y el vendedor no se hace cargo"*
    - *"Me despidieron sin causa después de 10 años de trabajo"*
-3. El chatbot muestra su progreso ("Reescribiendo la consulta, buscando normativa y fallos…") y
-   tarda entre 15 y 25 segundos en responder — internamente hace varias llamadas al modelo en
-   cadena (reescritura de la consulta, búsqueda y generación de la respuesta).
+3. El chatbot muestra el progreso real de cada etapa mientras trabaja («Reescribiendo la
+   consulta…» → «Buscando normativa y fallos…» → «Redactando la respuesta…») y tarda entre 15 y
+   25 segundos en responder — internamente hace varias llamadas al modelo en cadena.
 4. La respuesta viene en markdown, organizada por tema, con cada afirmación normativa citando su
-   fuente entre corchetes (`[frag:...]` para leyes, `[cfrag:...]` para fallos).
-5. Debajo de la respuesta hay tres desplegables:
+   fuente entre corchetes (`[frag:...]` para leyes, `[cfrag:...]` para fallos). **Las citas son
+   clickeables**: un `frag` te lleva a la ficha de esa norma en el Explorador y un `cfrag` abre
+   el fallo en SAIJ.
+5. **Podés repreguntar**: la conversación tiene memoria («¿y si el conductor era menor de
+   edad?» se entiende en el contexto del caso anterior). "Nueva conversación" arranca de cero.
+6. Debajo de la respuesta hay tres desplegables:
    - **Citas textuales**: cada cita con un sello **VERIFICADA** o **NO VERIFICADA** según se haya
      comprobado automáticamente que es texto literal de la fuente citada — así podés confiar (o
      desconfiar puntualmente) en cada afirmación sin tener que ir a buscar el texto original vos
      mismo.
    - **Leyes recuperadas**: la lista completa de normas que encontró el buscador, con su similitud.
    - **Fallos CSJN recuperados**: idem para jurisprudencia.
-6. Al pie, un recordatorio fijo: esto es asistencia a la investigación jurídica sobre un corpus
-   acotado, **no asesoramiento legal**.
+7. Al pie de cada respuesta hay botones **👍/👎** — el voto se guarda en
+   `outputs/feedback_chatbot.parquet` y alimenta la evaluación del proyecto. Usalos: es un dato
+   más para el informe.
+8. También al pie, un recordatorio fijo: esto es asistencia a la investigación jurídica sobre un
+   corpus acotado, **no asesoramiento legal**.
 
 ## 7. Limitaciones a tener presentes mientras la usás
 
