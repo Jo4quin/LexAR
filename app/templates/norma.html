@@ -5,7 +5,7 @@
 <a href="/explorador" class="font-mono text-[11px] tracking-[0.14em] uppercase text-tinta hover:text-tinta-deep">← Explorador</a>
 
 <header class="mt-4 pb-6 border-b border-ink/70">
-  <p class="font-mono text-[11px] tracking-[0.16em] uppercase text-ink-soft mb-2">{{ doc.tipo }} · <span class="text-tinta">{{ doc.document_id }}</span></p>
+  <p class="font-mono text-[11px] tracking-[0.16em] uppercase text-ink-soft mb-2">{{ doc.tipo }}{% if doc.numero != "S/N" %} <span class="text-tinta">{{ doc.numero }}</span>{% endif %} · {{ doc.document_id }}</p>
   <h1 class="font-display text-[1.9rem] leading-tight max-w-4xl">{{ doc.titulo }}</h1>
   <div class="flex flex-wrap gap-x-8 gap-y-1 mt-3 font-mono text-xs text-ink-soft">
     <span>Sanción <span class="text-ink">{{ doc.sancion }}</span></span>
@@ -13,6 +13,12 @@
     <span>Vínculos <span class="text-ink">{{ n_vinculos }}</span></span>
   </div>
 </header>
+
+{% if doc.vigencia.estado %}
+<div class="mt-5 border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm">
+  <strong class="uppercase tracking-wide">{{ doc.vigencia.estado }}</strong> — {{ doc.vigencia.detalle }}
+</div>
+{% endif %}
 
 {% if n_mods %}
 <div class="mt-5 border-l-[3px] border-rojo bg-rojo-wash px-4 py-3 text-sm">
@@ -99,10 +105,12 @@
     <div class="flex flex-wrap gap-x-5 gap-y-1 mt-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-soft">
       <span class="flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-ink-soft"></span> oficial</span>
       <span class="flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-dashed border-ink-soft"></span> semántico</span>
-      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#A93D32"></span> conflicto</span>
-      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#4A3C8C"></span> modificación</span>
-      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#A99BE3"></span> superposición</span>
-      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#C9C4B8"></span> otras</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5" style="background:#4A3C8C"></span> modificación</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5" style="background:#A99BE3"></span> superposición</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5" style="background:#C9C4B8"></span> otras</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:#A93D32"></span> nodo derogada</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full border-2" style="border-color:#C68A2E"></span> muy modificada</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5 rounded-full border-2 border-ink-soft/40"></span> tamaño = similitud</span>
     </div>
   </div>
 </section>

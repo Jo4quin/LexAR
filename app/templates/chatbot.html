@@ -32,13 +32,26 @@
 
 <form id="chat-form" hx-post="/chatbot/mensaje" hx-target="#chat" hx-swap="beforeend show:bottom"
       hx-disabled-elt="find input, find button"
-      class="mt-6 flex gap-2 sticky bottom-4">
-  <input name="caso" required autocomplete="off" placeholder="Escribí tu caso…" aria-label="Caso a consultar"
-         class="flex-1 bg-surface border border-line rounded-sm px-4 py-3 text-[0.95rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none shadow-sm">
-  <button type="submit"
-          class="bg-tinta text-white font-mono text-[11px] tracking-[0.14em] uppercase px-5 rounded-sm hover:bg-tinta-deep transition-colors disabled:opacity-50 cursor-pointer">
-    Consultar
-  </button>
+      class="mt-6 sticky bottom-4">
+  <div class="flex items-center gap-2 mb-2" role="radiogroup" aria-label="Modelo de respuesta">
+    <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-soft">Modelo:</span>
+    {% for valor, nombre, detalle in [("pro", "Pro", "máxima calidad, ~1 min"), ("flash", "Flash", "más rápido, contexto liviano, ~40 s")] %}
+    <label class="cursor-pointer" title="{{ detalle }}">
+      <input type="radio" name="modelo" value="{{ valor }}" class="sr-only peer" {{ "checked" if valor == "pro" }}>
+      <span class="inline-block font-mono text-[10.5px] tracking-[0.1em] uppercase px-2.5 py-1 rounded-sm border border-line text-ink-soft
+                   peer-checked:bg-tinta peer-checked:text-white peer-checked:border-tinta transition-colors">{{ nombre }}</span>
+    </label>
+    {% endfor %}
+    <span id="modelo-detalle" class="text-[11px] text-ink-soft">máxima calidad, ~1 min</span>
+  </div>
+  <div class="flex gap-2">
+    <input name="caso" required autocomplete="off" placeholder="Escribí tu caso…" aria-label="Caso a consultar"
+           class="flex-1 bg-surface border border-line rounded-sm px-4 py-3 text-[0.95rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none shadow-sm">
+    <button type="submit"
+            class="bg-tinta text-white font-mono text-[11px] tracking-[0.14em] uppercase px-5 rounded-sm hover:bg-tinta-deep transition-colors disabled:opacity-50 cursor-pointer">
+      Consultar
+    </button>
+  </div>
 </form>
 
 <script>
@@ -62,8 +75,15 @@
     bubble.scrollIntoView({ behavior: "smooth", block: "end" });
   });
   form.addEventListener("htmx:afterRequest", () => {
-    form.reset();
+    // Limpiar solo el caso (no form.reset(), que volvería el modelo a Pro cada vez).
+    form.elements.caso.value = "";
     form.elements.caso.focus();
+  });
+  // Detalle del modelo elegido junto al toggle.
+  const detalle = document.getElementById("modelo-detalle");
+  const DETALLES = { pro: "máxima calidad, ~1 min", flash: "más rápido, contexto liviano, ~40 s" };
+  form.querySelectorAll('input[name="modelo"]').forEach((r) => {
+    r.addEventListener("change", () => { detalle.textContent = DETALLES[r.value]; });
   });
 </script>
 
