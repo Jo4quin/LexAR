@@ -30,13 +30,8 @@
   </div>
 </div>
 
-<div id="pensando" class="htmx-indicator items-center gap-3 mt-4 text-sm text-ink-soft">
-  <span class="puntos"><span></span><span></span><span></span></span>
-  Reescribiendo la consulta, buscando normativa y fallos… la primera consulta además carga los índices (tarda un poco más).
-</div>
-
 <form id="chat-form" hx-post="/chatbot/mensaje" hx-target="#chat" hx-swap="beforeend show:bottom"
-      hx-indicator="#pensando" hx-disabled-elt="find input, find button"
+      hx-disabled-elt="find input, find button"
       class="mt-6 flex gap-2 sticky bottom-4">
   <input name="caso" required autocomplete="off" placeholder="Escribí tu caso…" aria-label="Caso a consultar"
          class="flex-1 bg-surface border border-line rounded-sm px-4 py-3 text-[0.95rem] placeholder:text-ink-soft/50 focus:border-tinta focus:outline-none shadow-sm">
@@ -49,11 +44,17 @@
 <script>
   const form = document.getElementById("chat-form");
   const chat = document.getElementById("chat");
-  // La burbuja del usuario se agrega al mandar (no al responder): la respuesta tarda ~10-30 s
-  // y el mensaje propio tiene que verse de inmediato.
-  form.addEventListener("htmx:configRequest", () => {
+  // Historial de la conversacion, solo en el cliente: se manda como JSON en cada consulta para
+  // que answer_case() entienda repreguntas ("¿y si el conductor era menor?"). El turno del
+  // asistente lo agrega un <script> dentro del partial de respuesta.
+  window.historial = [];
+  form.addEventListener("htmx:configRequest", (e) => {
     const caso = form.elements.caso.value.trim();
     if (!caso) return;
+    e.detail.parameters.historial = JSON.stringify(window.historial);
+    window.historial.push({ role: "user", content: caso });
+    // La burbuja del usuario se agrega al mandar (no al responder): el mensaje propio tiene
+    // que verse de inmediato; el progreso real lo muestra la burbuja de polling.
     const bubble = document.createElement("div");
     bubble.className = "ml-auto w-fit max-w-[75%] bg-tinta text-white rounded-sm px-4 py-2.5 text-sm leading-relaxed";
     bubble.textContent = caso;
