@@ -10,8 +10,8 @@ casos planteados en lenguaje natural con citas normativas verificadas contra la 
 > **Historia del proyecto (pivot, 2026-07-08).** LexAR arrancó como un detector de **redundancias y
 > contradicciones** entre leyes (Fases 1-3) y luego viró hacia un producto de asistencia jurídica
 > (Fases 4-8). Las Fases 1-3 no se descartaron: son el motor de retrieval del producto (embeddings +
-> grafo de vínculos) y una de sus señales de análisis. El detalle de implementación del pivot está en
-> [`PLAN.md`](PLAN.md).
+> grafo de vínculos) y una de sus señales de análisis. El detalle de cada fase está más abajo, en
+> [Fases y resultados](#fases-y-resultados).
 
 ## Qué hace
 
@@ -113,8 +113,6 @@ fuera del recorte disponible.
 ```
 README.md            # este archivo
 TUTORIAL.md          # cómo usar la app (Explorador + Chatbot), paso a paso
-PLAN.md              # plan de implementación del pivot (Fases 4-8)
-CLAUDE.md            # documentación técnica interna detallada (arquitectura, gotchas, decisiones)
 requirements.txt
 notebooks/           # el pipeline, un notebook por fase
   Redundancias&Contradicciones.ipynb   # Fases 1-2: corpus, segmentación, embeddings, retrieval
@@ -129,7 +127,8 @@ eval/                # casos_prueba.csv: ground truth anotado a mano (Fase 8)
 data/ , outputs/     # gitignored — se descargan del Drive (ver arriba)
 ```
 
-El detalle técnico de cada módulo, los gotchas y las decisiones de diseño están en [`CLAUDE.md`](CLAUDE.md).
+El detalle técnico de cada fase está documentado en el notebook correspondiente y en el código de
+`src/lexar/`.
 
 ## Fases y resultados
 

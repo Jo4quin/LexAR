@@ -1,13 +1,14 @@
 # Tutorial: usar el Asistente Jurídico LexAR
 
 Guía práctica para poner en marcha la app (Explorador + Chatbot) y usarla. Para el detalle técnico
-de cómo se construyó cada pieza, ver `PLAN.md` y `CLAUDE.md`; este documento es solo "cómo la uso".
+de cómo se construyó cada pieza, ver los notebooks de `notebooks/` y el `README.md`; este documento
+es solo "cómo la uso".
 
 ## 1. Requisitos previos
 
 - Python 3.11+ instalado.
 - El paquete de datos `data/lexar_datos_infoleg_saij/` ya colocado en la raíz del repo (ver
-  `CLAUDE.md` → "Local data" si todavía no lo tenés).
+  `README.md` → "Datos y artefactos" si todavía no lo tenés — se descargan del Drive).
 - Los outputs de las Fases 1-4 ya generados en `outputs/` — es decir, haber corrido al menos una
   vez `notebooks/Redundancias&Contradicciones.ipynb`, `Clasificacion_Candidatos.ipynb`,
   `Jurisprudencia_CSJN.ipynb` y `Vinculos_Normas.ipynb`. Si no los corriste todavía, la página

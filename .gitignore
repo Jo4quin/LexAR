@@ -1,5 +1,5 @@
 # Datos: paquetes pesados (cientos de MB), no se versionan.
-# Se comparten por fuera de git; ver README.md / CLAUDE.md para la ubicacion esperada.
+# Se comparten por fuera de git; ver README.md para la ubicacion esperada.
 /data/
 
 # Salidas generadas por notebooks/scripts.
@@ -20,5 +20,9 @@ venv/
 # Material de estudio personal (no es parte del entregable del proyecto).
 /docspropios/
 
-# Paquete temporal para compartir outputs/ por fuera de git (ver README.md/CLAUDE.md).
+# Paquete temporal para compartir outputs/ por fuera de git (ver README.md).
 /outputs.zip
+
+# Documentacion interna: se mantiene local, no se publica en el repo.
+/PLAN.md
+/CLAUDE.md
