@@ -21,6 +21,7 @@ from .config import (
     EMBEDDING_FRAGMENTS_PATH,
     EMBEDDINGS_NPY_PATH,
 )
+from .saij import public_fallo_url
 
 LAW_METADATA_COLUMNS = ["fragment_id", "document_id", "label", "titulo_resumido", "tipo_norma", "fecha_sancion"]
 CASE_METADATA_COLUMNS = [
@@ -110,7 +111,14 @@ def load_law_index() -> CorpusIndex:
 
 def load_case_index() -> CorpusIndex:
     """Indice sobre los fragmentos de fallos CSJN de la Fase 4."""
-    return _load_corpus(CASE_EMBEDDINGS_NPY_PATH, CASE_FRAGMENTS_PATH, CASE_METADATA_COLUMNS)
+    index = _load_corpus(CASE_EMBEDDINGS_NPY_PATH, CASE_FRAGMENTS_PATH, CASE_METADATA_COLUMNS)
+    # Repara la URL publica de SAIJ: case_fragments.parquet puede tener urls sin el segmento uuid
+    # (formato viejo que devuelve 500 al abrir el fallo). Ver saij.public_fallo_url.
+    index.fragments["url"] = [
+        public_fallo_url(u, c)
+        for u, c in zip(index.fragments["url"], index.fragments["case_id"])
+    ]
+    return index
 
 
 def aggregate_hits_by_document(hits: pd.DataFrame, id_col: str = "document_id") -> pd.DataFrame:

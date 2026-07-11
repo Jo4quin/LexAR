@@ -173,6 +173,21 @@ def fetch_fallo(uuid: str) -> dict:
     return row
 
 
+def public_fallo_url(url: str, case_id: str) -> str:
+    """URL publica de un fallo garantizando el segmento uuid que SAIJ exige (ver el gotcha del
+    encabezado). Idempotente y reparadora: `case_fragments.parquet` puede haber quedado con urls
+    viejas de la forma `{BASE_URL}/{slug}` (sin uuid) generadas antes del fix del 2026-07-09 — esas
+    devuelven HTTP 500. El uuid se recupera del `case_id` (`saij:<uuid>`) y se agrega si falta.
+    Devuelve "" si no hay url."""
+    url = (url or "").strip()
+    if not url:
+        return ""
+    uuid = case_id.removeprefix("saij:") if case_id else ""
+    if not uuid or url.rstrip("/").endswith(f"/{uuid}"):
+        return url
+    return f"{url.rstrip('/')}/{uuid}"
+
+
 def _load_fetched_uuids(parts_dir: Path) -> set[str]:
     done: set[str] = set()
     for part in sorted(parts_dir.glob("part_*.parquet")):
