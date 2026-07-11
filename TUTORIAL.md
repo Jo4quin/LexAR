@@ -91,10 +91,14 @@ falta algo, aparece marcado y te dice de qué fase viene.
 
 ## 5 bis. Hallazgos — posibles conflictos normativos
 
-La sección **Hallazgos** muestra el resultado estrella del análisis de las Fases 1-3: los 84
-pares de fragmentos que el clasificador de dos niveles confirmó como *posible conflicto* (sobre
-679.720 pares analizados). Cada card muestra las dos normas (con link a sus fichas), la
-explicación del modelo verificador, la similitud y confianza, y los dos fragmentos enfrentados.
+La sección **Hallazgos** muestra el resultado estrella del análisis de las Fases 1-3: los pares de
+fragmentos confirmados como *posible conflicto normativo*. El clasificador de dos niveles marcó 84
+sobre 679.720 pares analizados, pero al revisarlos se vio que la mayoría eran *instrumentos
+paralelos* (tratados con contrapartes distintas, regímenes para beneficiarios distintos), no
+contradicciones; una re-verificación con criterio más estricto (Fase 3.5) los dejó en **4 conflictos
+confirmados**, cada uno con su escenario concreto de colisión. Cada card muestra las dos normas (con
+link a sus fichas), la explicación del modelo verificador, la similitud y confianza, y los dos
+fragmentos enfrentados.
 El botón "Explicar IA" genera un resumen más elaborado del vínculo (mismo caché que el
 Explorador). Ojo: «posible conflicto» es una señal para revisión profesional, no un dictamen.
 
